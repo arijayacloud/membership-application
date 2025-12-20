@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class HomeService extends Model
 {
@@ -16,8 +16,12 @@ class HomeService extends Model
         'schedule_date',
         'schedule_time',
         'address',
-        'note',
+        'city',
+        'problem_description',
+        'problem_photo',
         'status',
+        'work_notes',
+        'completion_photo'
     ];
 
     public function member()

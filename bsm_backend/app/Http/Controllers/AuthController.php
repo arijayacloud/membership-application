@@ -92,8 +92,14 @@ class AuthController extends Controller
     // ==========================================
     public function profile(Request $request)
     {
+        $user = $request->user();
+        $member = $user->member;
+
         return response()->json([
-            'user' => $request->user()
+            'success'   => true,
+            'is_member' => $member !== null,
+            'user'      => $user,
+            'member'    => $member
         ], 200);
     }
 
@@ -109,6 +115,38 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Token refreshed',
             'token' => $newToken
+        ], 200);
+    }
+
+    // ==========================================
+    // ✏️ UPDATE PROFILE USER / ADMIN
+    // ==========================================
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'name'     => 'required|string|max:255',
+            'email'    => 'nullable|email|unique:users,email,' . $user->id,
+            'phone'    => 'required|string|unique:users,phone,' . $user->id,
+            'password' => 'nullable|min:6|confirmed',
+        ]);
+
+        $user->name  = $request->name;
+        $user->email = $request->email;
+        $user->phone = $request->phone;
+
+        // jika password diisi → update
+        if ($request->filled('password')) {
+            $user->password = Hash::make($request->password);
+        }
+
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profil berhasil diperbarui',
+            'user'    => $user
         ], 200);
     }
 }

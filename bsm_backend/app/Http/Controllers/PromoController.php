@@ -9,20 +9,77 @@ use Illuminate\Support\Facades\Storage;
 class PromoController extends Controller
 {
     // ============================
-    // 📌 GET ALL PROMO (USER/ADMIN)
+    // 📌 GET ALL PROMO (MEMBER + ADMIN)
     // ============================
-    public function index()
+    public function index(Request $request)
     {
-        $promos = Promo::where('is_active', true)
-            ->where(function($q){
-                $q->whereNull('end_date')->orWhere('end_date', '>=', now());
-            })
-            ->latest()
-            ->get();
+        Promo::where('is_active', 1)->expired()->update(['is_active' => 0]);
+
+        $status = $request->query('status');
+        $query = Promo::query();
+
+        // User / guest
+        if (!$request->user() || $request->user()->role === "user") {
+            $query->where('is_active', 1)
+                ->where(function ($q) {
+                    $q->whereNull('end_date')
+                        ->orWhere('end_date', '>=', now());
+                });
+        }
+
+        // Filter admin
+        if ($status === "expired") {
+            $query->whereNotNull('end_date')
+                ->where('end_date', '<', now());
+        } elseif ($status === "upcoming") {
+            $query->where('start_date', '>', now());
+        } elseif ($status === "active") {
+            $query->where('is_active', 1)
+                ->where(function ($q) {
+                    $q->whereNull('end_date')
+                        ->orWhere('end_date', '>=', now());
+                });
+        }
+
+        $promos = $query
+            ->select('id', 'title', 'description', 'banner', 'is_active', 'start_date', 'end_date')
+            ->orderByDesc('id')
+            ->paginate(10);
 
         return response()->json([
             'message' => 'Promo list retrieved',
             'data' => $promos
+        ]);
+    }
+
+    // ============================
+    // 📌 GET DETAIL PROMO (MEMBER + ADMIN)
+    // ============================
+    public function show($id, Request $request)
+    {
+        $promo = Promo::find($id);
+
+        if (!$promo) {
+            return response()->json([
+                'message' => 'Promo not found'
+            ], 404);
+        }
+
+        // Member hanya bisa lihat promo aktif
+        if ((!$request->user() || $request->user()->role == "user")) {
+            if (
+                !$promo->is_active ||
+                ($promo->end_date && $promo->end_date < now())
+            ) {
+                return response()->json([
+                    'message' => 'Promo tidak tersedia'
+                ], 403);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Promo detail retrieved',
+            'data' => $promo
         ]);
     }
 
@@ -33,7 +90,7 @@ class PromoController extends Controller
     {
         $request->validate([
             'title'        => 'required',
-            'banner'       => 'nullable|image|mimes:jpg,png,jpeg',
+            'banner' => 'nullable|image|max:5120',
             'description'  => 'nullable',
             'start_date'   => 'nullable|date',
             'end_date'     => 'nullable|date|after_or_equal:start_date',

@@ -1,3 +1,4 @@
+import 'package:bsm_frontend/app/presentation/widgets/show_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
@@ -5,7 +6,7 @@ import '../../config/app_routes.dart';
 
 class RegisterPage extends StatefulWidget {
   @override
-  _RegisterPageState createState() => _RegisterPageState();
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
 class _RegisterPageState extends State<RegisterPage> {
@@ -22,264 +23,288 @@ class _RegisterPageState extends State<RegisterPage> {
   bool hideAdminKey = true;
 
   @override
+  void dispose() {
+    nameCtrl.dispose();
+    phoneCtrl.dispose();
+    emailCtrl.dispose();
+    passCtrl.dispose();
+    adminKeyCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE9F0FF),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 20),
-          child: Form(
-            key: formKey,
+      backgroundColor: const Color(0xFFF3F6FB),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 26),
             child: Column(
               children: [
-                // ===================== LOGO =====================
-                AnimatedContainer(
-                  duration: Duration(milliseconds: 300),
-                  padding: const EdgeInsets.all(28),
+                const SizedBox(height: 40),
+
+                // ================= LOGO =================
+                Container(
+                  padding: const EdgeInsets.all(22),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF1F3C88), Color(0xFF3A6EA5)],
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 15,
-                        offset: Offset(0, 6),
+                        color: Colors.blue.withOpacity(0.3),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
                       ),
                     ],
                   ),
-                  child: Icon(
-                    Icons.person_add_alt_rounded,
-                    color: Colors.blue[700],
-                    size: 70,
+                  child: const Icon(
+                    Icons.electric_moped_rounded,
+                    size: 72,
+                    color: Colors.white,
                   ),
                 ),
 
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
 
-                Text(
-                  "BSM Klinik Center",
+                const Text(
+                  "BSM Service Center",
                   style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
-                    color: Colors.blue[900],
-                    letterSpacing: 0.3,
+                    color: Color(0xFF1F3C88),
                   ),
                 ),
 
                 const SizedBox(height: 8),
 
                 Text(
-                  "Pendaftaran Akun Pengguna Klinik",
-                  style: TextStyle(fontSize: 15, color: Colors.blueGrey[600]),
+                  "Pendaftaran Akun Layanan Resmi Motor & Sepeda Listrik",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.blueGrey.shade600,
+                  ),
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 36),
 
-                // ===================== CARD REGISTER =====================
-                Container(
-                  decoration: BoxDecoration(
+                // ================= CARD FORM =================
+                Card(
+                  elevation: 8,
+                  shadowColor: Colors.blue.withOpacity(0.2),
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
-                    color: Colors.white.withOpacity(0.92),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 15,
-                        offset: Offset(0, 6),
-                      ),
-                    ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Daftar Akun",
-                          style: TextStyle(
-                            fontSize: 23,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue[800],
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-
-                        buildField(
-                          controller: nameCtrl,
-                          label: "Nama Lengkap",
-                          icon: Icons.person,
-                          validator: (v) =>
-                              v!.isEmpty ? "Nama wajib diisi" : null,
-                        ),
-                        const SizedBox(height: 18),
-
-                        buildField(
-                          controller: phoneCtrl,
-                          label: "No HP",
-                          icon: Icons.phone_android,
-                          type: TextInputType.phone,
-                          validator: (v) =>
-                              v!.isEmpty ? "No HP wajib diisi" : null,
-                        ),
-                        const SizedBox(height: 18),
-
-                        buildField(
-                          controller: emailCtrl,
-                          label: "Email *",
-                          icon: Icons.email,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return "Email wajib diisi";
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 18),
-
-                        buildField(
-                          controller: passCtrl,
-                          label: "Password",
-                          icon: Icons.lock_outline,
-                          obscure: hidePass,
-                          toggle: () => setState(() => hidePass = !hidePass),
-                          validator: (v) =>
-                              v!.length < 6 ? "Minimal 6 karakter" : null,
-                        ),
-
-                        const SizedBox(height: 22),
-
-                        Text(
-                          "Daftar sebagai",
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Colors.blueGrey[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.blueGrey[50],
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: DropdownButtonFormField(
-                            isExpanded:
-                                true, // ← WAJIB untuk menghindari overflow
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
+                    padding: const EdgeInsets.all(22),
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Daftar Akun",
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1F3C88),
                             ),
-                            value: role,
-                            items: const [
-                              DropdownMenuItem(
-                                value: "user",
-                                child: Text("User"),
-                              ),
-                              DropdownMenuItem(
-                                value: "admin",
-                                child: Text("Admin"),
-                              ),
-                            ],
-                            onChanged: (val) => setState(() => role = val!),
                           ),
-                        ),
+                          const SizedBox(height: 24),
 
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          child: role == "admin"
-                              ? Column(
-                                  children: [
-                                    const SizedBox(height: 18),
-                                    buildField(
-                                      controller: adminKeyCtrl,
-                                      label: "Kode Rahasia Admin",
-                                      icon: Icons.key,
-                                      obscure: hideAdminKey,
-                                      toggle: () => setState(
-                                        () => hideAdminKey = !hideAdminKey,
-                                      ),
-                                      validator: (v) =>
-                                          role == "admin" && v!.isEmpty
-                                          ? "Kode admin wajib"
-                                          : null,
-                                    ),
-                                  ],
-                                )
-                              : const SizedBox.shrink(),
-                        ),
+                          _label("Nama Lengkap"),
+                          _field(
+                            controller: nameCtrl,
+                            hint: "Masukkan nama lengkap",
+                            icon: Icons.person_outline,
+                            validator: (v) =>
+                                v == null || v.isEmpty ? "Nama wajib diisi" : null,
+                          ),
+                          const SizedBox(height: 18),
 
-                        const SizedBox(height: 30),
+                          _label("No HP"),
+                          _field(
+                            controller: phoneCtrl,
+                            hint: "08xxxxxxxxxx",
+                            icon: Icons.phone_android,
+                            type: TextInputType.phone,
+                            validator: (v) =>
+                                v == null || v.isEmpty ? "No HP wajib diisi" : null,
+                          ),
+                          const SizedBox(height: 18),
 
-                        auth.isLoading
-                            ? const Center(child: CircularProgressIndicator())
-                            : SizedBox(
-                                width: double.infinity,
-                                height: 52,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                  ),
-                                  onPressed: () async {
-                                    if (!formKey.currentState!.validate())
-                                      return;
+                          _label("Email"),
+                          _field(
+                            controller: emailCtrl,
+                            hint: "email@example.com",
+                            icon: Icons.email_outlined,
+                            type: TextInputType.emailAddress,
+                            validator: (v) =>
+                                v == null || v.isEmpty ? "Email wajib diisi" : null,
+                          ),
+                          const SizedBox(height: 18),
 
-                                    final ok = await auth.register(
-                                      name: nameCtrl.text,
-                                      phone: phoneCtrl.text,
-                                      email: emailCtrl.text,
-                                      password: passCtrl.text,
-                                      role: role,
-                                      adminKey: adminKeyCtrl.text,
-                                    );
+                          _label("Password"),
+                          _field(
+                            controller: passCtrl,
+                            hint: "Minimal 6 karakter",
+                            icon: Icons.lock_outline,
+                            obscure: hidePass,
+                            suffix: IconButton(
+                              icon: Icon(
+                                hidePass
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                              ),
+                              onPressed: () =>
+                                  setState(() => hidePass = !hidePass),
+                            ),
+                            validator: (v) => v == null || v.length < 6
+                                ? "Minimal 6 karakter"
+                                : null,
+                          ),
 
-                                    if (ok) {
-                                      Navigator.pushReplacementNamed(
-                                        context,
-                                        AppRoutes.login,
-                                      );
-                                    } else {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text("Pendaftaran gagal!"),
-                                          backgroundColor: Colors.red,
+                          const SizedBox(height: 22),
+
+                          _label("Daftar sebagai"),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF4F6FA),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: DropdownButtonFormField<String>(
+                              value: role,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: "user",
+                                  child: Text("User"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "admin",
+                                  child: Text("Admin"),
+                                ),
+                              ],
+                              onChanged: (v) => setState(() => role = v!),
+                            ),
+                          ),
+
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            child: role == "admin"
+                                ? Column(
+                                    key: const ValueKey("admin"),
+                                    children: [
+                                      const SizedBox(height: 18),
+                                      _label("Kode Rahasia Admin"),
+                                      _field(
+                                        controller: adminKeyCtrl,
+                                        hint: "Masukkan kode admin",
+                                        icon: Icons.key,
+                                        obscure: hideAdminKey,
+                                        suffix: IconButton(
+                                          icon: Icon(
+                                            hideAdminKey
+                                                ? Icons.visibility_off
+                                                : Icons.visibility,
+                                          ),
+                                          onPressed: () => setState(
+                                            () => hideAdminKey = !hideAdminKey,
+                                          ),
                                         ),
-                                      );
-                                    }
-                                  },
-                                  child: Ink(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          Colors.blue.shade700,
-                                          Colors.blue.shade500,
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
+                                        validator: (v) {
+  if (role == "admin" && (v == null || v.isEmpty)) {
+    return "Kode admin wajib";
+  }
+  return null;
+},
                                       ),
-                                      borderRadius: BorderRadius.circular(16),
+                                    ],
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+
+                          const SizedBox(height: 30),
+
+                          auth.isLoading
+                              ? const Center(
+                                  child: CircularProgressIndicator(),
+                                )
+                              : SizedBox(
+                                  width: double.infinity,
+                                  height: 52,
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      backgroundColor: Colors.transparent,
+                                      shadowColor: Colors.transparent,
                                     ),
-                                    child: Container(
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        "Daftar Sekarang",
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.white,
+                                    onPressed: () async {
+                                      if (!formKey.currentState!.validate()) {
+                                        return;
+                                      }
+
+                                      final ok = await auth.register(
+                                        name: nameCtrl.text.trim(),
+                                        phone: phoneCtrl.text.trim(),
+                                        email: emailCtrl.text.trim(),
+                                        password: passCtrl.text,
+                                        role: role,
+                                        adminKey: adminKeyCtrl.text,
+                                      );
+
+                                      ShowSnackBar.show(
+                                        context,
+                                        ok
+                                            ? "Registrasi berhasil! Silakan login 😊"
+                                            : "Registrasi gagal, periksa kembali!",
+                                        ok ? "success" : "error",
+                                      );
+
+                                      if (ok) {
+                                        Navigator.pushReplacementNamed(
+                                          context,
+                                          AppRoutes.login,
+                                        );
+                                      }
+                                    },
+                                    child: Ink(
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [
+                                            Color(0xFF1F3C88),
+                                            Color(0xFF3A6EA5),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: const Center(
+                                        child: Text(
+                                          "DAFTAR SEKARANG",
+                                          style: TextStyle(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: 1,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -298,11 +323,11 @@ class _RegisterPageState extends State<RegisterPage> {
                         context,
                         AppRoutes.login,
                       ),
-                      child: Text(
+                      child: const Text(
                         "Masuk",
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue[800],
+                          color: Color(0xFF1F3C88),
                         ),
                       ),
                     ),
@@ -310,9 +335,8 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
 
                 const SizedBox(height: 10),
-
                 Text(
-                  "Aplikasi Resmi Layanan Klinik BSM",
+                  "Aplikasi Resmi BSM Service Center",
                   style: TextStyle(color: Colors.grey[600]),
                 ),
               ],
@@ -323,15 +347,28 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  // =========================== Custom Field ===========================
-  Widget buildField({
+  // ===================== FIELD =====================
+  Widget _label(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Colors.blueGrey.shade700,
+        ),
+      ),
+    );
+  }
+
+  Widget _field({
     required TextEditingController controller,
-    required String label,
+    required String hint,
     required IconData icon,
     String? Function(String?)? validator,
     bool obscure = false,
-    VoidCallback? toggle,
     TextInputType type = TextInputType.text,
+    Widget? suffix,
   }) {
     return TextFormField(
       controller: controller,
@@ -339,20 +376,12 @@ class _RegisterPageState extends State<RegisterPage> {
       validator: validator,
       keyboardType: type,
       decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: Colors.blue[600]),
-        suffixIcon: toggle != null
-            ? IconButton(
-                icon: Icon(
-                  obscure ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.grey[600],
-                ),
-                onPressed: toggle,
-              )
-            : null,
-        hintText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: const Color(0xFF1F3C88)),
+        suffixIcon: suffix,
         filled: true,
-        fillColor: Colors.blueGrey[50],
-        contentPadding: EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+        fillColor: const Color(0xFFF4F6FA),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,

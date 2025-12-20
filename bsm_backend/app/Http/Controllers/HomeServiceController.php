@@ -2,146 +2,362 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\HomeService;
+use App\Models\User;
+use App\Models\Member;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 
 class HomeServiceController extends Controller
 {
-    // ==============================
-    // 🧾 LIST DATA HOME SERVICE
-    // ==============================
+    // ======================================================
+    // 📌 LIST DATA — ADMIN (SEARCH + FILTER STATUS)
+    // ======================================================
     public function index(Request $request)
     {
-        $user = $request->user();
+        $search = $request->query('search');
+        $status = $request->query('status');
 
-        // Jika admin → tampilkan semua
-        if ($user->role === 'admin') {
-            $data = HomeService::with('member')->latest()->get();
-        }
-        // Jika user → hanya miliknya
-        else {
-            if (!$user->member) {
-                return response()->json([
-                    'message' => 'Anda belum menjadi member, silakan daftar member terlebih dahulu.'
-                ], 403);
-            }
+        $query = HomeService::with([
+            'user:id,name,phone,email',
+            'member:id,vehicle_type,vehicle_brand,vehicle_model,vehicle_serial_number'
+        ])->latest();
 
-            $data = HomeService::where('member_id', $user->member->id)->latest()->get();
+        // =========================
+        // SEARCH (ADMIN)
+        // =========================
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('service_type', 'like', "%$search%")
+                    ->orWhere('address', 'like', "%$search%")
+                    ->orWhereHas('user', function ($u) use ($search) {
+                        $u->where('name', 'like', "%$search%")
+                            ->orWhere('phone', 'like', "%$search%");
+                    })
+                    ->orWhereHas('member', function ($m) use ($search) {
+                        $m->where('vehicle_type', 'like', "%$search%")
+                            ->orWhere('vehicle_brand', 'like', "%$search%")
+                            ->orWhere('vehicle_model', 'like', "%$search%");
+                    });
+            });
         }
+
+        // =========================
+        // FILTER STATUS
+        // =========================
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $data = $query->paginate(10);
 
         return response()->json([
-            'message' => 'Data retrieved successfully',
-            'data' => $data
-        ], 200);
+            "success" => true,
+            "home_service" => $data
+        ]);
     }
 
-    // ==============================
-    // 🏥 REQUEST HOME SERVICE (USER)
-    // ==============================
-    public function requestService(Request $request)
+    public function store(Request $request)
     {
-        $request->validate([
-            'service_type' => 'required|string',
-            'schedule_date' => 'required|date',
-            'schedule_time' => 'required',
-            'address' => 'required|string',
-            'note' => 'nullable|string'
-        ]);
-
+        // ===============================
+        // 🔐 AUTH CHECK
+        // ===============================
         $user = $request->user();
-
-        // Harus member
-        if (!$user->member) {
+        if (!$user) {
             return response()->json([
-                'message' => 'Home Service hanya tersedia untuk member! Silakan daftar member terlebih dahulu.'
+                "success" => false,
+                "message" => "Unauthenticated"
+            ], 401);
+        }
+
+        // ===============================
+        // 🔒 CEK MEMBER
+        // ===============================
+        $member = $user->member;
+        if (!$member) {
+            return response()->json([
+                "success" => false,
+                "message" => "Anda belum menjadi member, tidak dapat mengajukan Home Service"
             ], 403);
         }
 
-        $homeService = HomeService::create([
-            'user_id' => $user->id,
-            'member_id' => $user->member->id,
-            'service_type' => $request->service_type,
-            'schedule_date' => $request->schedule_date,
-            'schedule_time' => $request->schedule_time,
-            'address' => $request->address,
-            'note' => $request->note,
-            'status' => 'pending',
+        // ===============================
+        // 🚫 CEK HOME SERVICE AKTIF
+        // ===============================
+        $hasActive = HomeService::where('user_id', $user->id)
+            ->whereIn('status', ['pending', 'approved', 'on_process'])
+            ->exists();
+
+        if ($hasActive) {
+            return response()->json([
+                "success" => false,
+                "message" => "Anda masih memiliki Home Service yang aktif"
+            ], 409);
+        }
+        // ===============================
+        // ✅ VALIDASI INPUT
+        // ===============================
+        $validated = $request->validate([
+            'service_type'        => 'required|string',
+            'schedule_date'       => 'required|date',
+            'schedule_time'       => 'required|date_format:H:i',
+            'address'             => 'nullable|string',
+            'city'                => 'nullable|string',
+            'problem_description' => 'nullable|string',
+            'problem_photo'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
         ]);
 
+        // ===============================
+        // 📸 UPLOAD FOTO (OPSIONAL)
+        // ===============================
+        $problemPhotoPath = null;
+        $problemPhotoUrl = null;
+
+        if ($request->hasFile('problem_photo')) {
+            $problemPhotoPath = $request->file('problem_photo')
+                ->store('problem_photos', 'public');
+
+            $problemPhotoUrl = asset('storage/' . $problemPhotoPath);
+        }
+
+        // ===============================
+        // 📍 ALAMAT FINAL
+        // ===============================
+        $finalAddress = $validated['address'] ?? $member->address;
+        $finalCity    = $validated['city'] ?? $member->city;
+
+        // ===============================
+        // 💾 SIMPAN HOME SERVICE
+        // ===============================
+        $homeService = HomeService::create([
+            'user_id'             => $user->id,
+            'member_id'           => $member->id,
+            'service_type'        => $validated['service_type'],
+            'schedule_date'       => $validated['schedule_date'],
+            'schedule_time'       => $validated['schedule_time'],
+            'address'             => $finalAddress,
+            'city'                => $finalCity,
+            'problem_description' => $validated['problem_description'] ?? null,
+            'problem_photo'       => $problemPhotoPath,
+            'status'              => 'pending', // 🔥 PENTING
+        ]);
+
+        // ===============================
+        // ✅ RESPONSE
+        // ===============================
         return response()->json([
-            'message' => 'Home Service request berhasil dikirim, menunggu persetujuan admin.',
-            'data' => $homeService
+            "success" => true,
+            "message" => "Home service request created successfully",
+            "data"    => $homeService,
+            "photo_url" => $problemPhotoUrl,
         ], 201);
     }
 
-    // ==============================
-    // 📄 DETAIL HOME SERVICE
-    // ==============================
-    public function show(Request $request, $id)
+    // ======================================================
+    // 📌 DETAIL — USER & ADMIN
+    // ======================================================
+    public function show($id)
     {
-        $data = HomeService::with(['member', 'user'])->findOrFail($id);
+        $service = HomeService::with(['user', 'member'])
+            ->find($id);
 
-        if ($request->user()->role !== 'admin') {
-            if (!$request->user()->member || $request->user()->member->id !== $data->member_id) {
-                return response()->json(['message' => 'Akses ditolak'], 403);
-            }
+        if (!$service) {
+            return response()->json([
+                "success" => false,
+                "message" => "Home service not found"
+            ], 404);
         }
 
         return response()->json([
-            'message' => 'Detail ditemukan',
-            'data' => $data
-        ], 200);
+            "success" => true,
+            "data" => $service
+        ]);
     }
 
-    // ==============================
-    // 🔧 UPDATE STATUS (ADMIN)
-    // ==============================
+    // ======================================================
+    // 📌 ADMIN UPDATE STATUS (pending → approved → on_progress → done)
+    // ======================================================
     public function updateStatus(Request $request, $id)
     {
         $request->validate([
-            'status' => 'required|in:pending,approved,on_progress,done,canceled'
+            'status' => 'required|in:pending,approved,on_process,done,canceled'
         ]);
 
-        if ($request->user()->role !== 'admin') {
-            return response()->json(['message' => 'Hak akses hanya untuk admin'], 403);
+        $service = HomeService::find($id);
+
+        if (!$service) {
+            return response()->json([
+                "success" => false,
+                "message" => "Home service not found"
+            ], 404);
         }
 
-        $homeService = HomeService::findOrFail($id);
-        $homeService->update(['status' => $request->status]);
+        $service->update([
+            'status' => $request->status
+        ]);
 
         return response()->json([
-            'message' => 'Status berhasil diperbarui.',
-            'status_now' => $request->status,
-            'data' => $homeService
+            "success" => true,
+            "message" => "Status updated",
+            "data" => $service->load(['user', 'member'])
+        ]);
+    }
+
+    // ======================================================
+    // 📌 ADMIN MENYELESAIKAN PENGERJAAN
+    // ======================================================
+    public function finishWork(Request $request, $id)
+    {
+        $request->validate([
+            'work_notes' => 'required|string',
+            'completion_photo' => 'nullable|image|max:2048'
+        ]);
+
+        $service = HomeService::find($id);
+
+        if (!$service) {
+            return response()->json([
+                "success" => false,
+                "message" => "Data not found"
+            ], 404);
+        }
+
+        if ($service->status === 'done') {
+            return response()->json([
+                "success" => false,
+                "message" => "Work already completed"
+            ], 400);
+        }
+
+        $photoPath = $service->completion_photo;
+
+        if ($request->hasFile('completion_photo')) {
+            $photoPath = $request->file('completion_photo')
+                ->store('completion_photos', 'public');
+        }
+
+        $service->update([
+            'work_notes' => $request->work_notes,
+            'completion_photo' => $photoPath,
+            'status' => 'done',
+            'completed_at' => now(),
+        ]);
+
+        return response()->json([
+            "success" => true,
+            "message" => "Work completed successfully",
+            "data" => $service->load(['user', 'member'])
+        ]);
+    }
+
+
+    // ======================================================
+    // 🗑 DELETE — ADMIN
+    // ======================================================
+    public function destroy($id)
+    {
+        $service = HomeService::find($id);
+
+        if (!$service) {
+            return response()->json([
+                "success" => false,
+                "message" => "Home service not found"
+            ], 404);
+        }
+
+        $service->delete();
+
+        return response()->json([
+            "success" => true,
+            "message" => "Home service deleted"
+        ]);
+    }
+
+    public function profile(Request $request)
+    {
+        $user = $request->user();
+
+        // Ambil data member
+        $member = Member::where('user_id', $user->id)->first();
+
+        // Jika bukan member
+        if (!$member) {
+            return response()->json([
+                "success" => false,
+                "data" => null,
+                "message" => "Anda belum menjadi member",
+            ], 200);
+        }
+
+        return response()->json([
+            "success" => true,
+            "data" => [
+                "name"                   => $user->name,
+                "phone"                  => $user->phone,
+                "email"                  => $user->email,
+
+                "address"                => $member->address,
+                "city"                   => $member->city,
+                "vehicle_type"           => $member->vehicle_type,
+                "vehicle_brand"          => $member->vehicle_brand,
+                "vehicle_model"          => $member->vehicle_model,
+                "vehicle_serial_number"  => $member->vehicle_serial_number,
+            ]
         ], 200);
     }
 
-    // ==============================
-    // ❌ CANCEL BY USER
-    // ==============================
-    public function cancel(Request $request, $id)
+    public function myRequests(Request $request)
     {
         $user = $request->user();
-        $homeService = HomeService::findOrFail($id);
 
-        if (!$user->member || $user->member->id !== $homeService->member_id) {
-            return response()->json(['message' => 'Akses ditolak'], 403);
-        }
-
-        if ($homeService->status === 'canceled') {
-            return response()->json(['message' => 'Request sudah dibatalkan sebelumnya'], 400);
-        }
-
-        if (!in_array($homeService->status, ['pending', 'approved'])) {
-            return response()->json(['message' => 'Tidak dapat membatalkan request pada status ini'], 400);
-        }
-
-        $homeService->update(['status' => 'canceled']);
+        $requests = HomeService::where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json([
-            'message' => 'Permintaan home service berhasil dibatalkan.',
-            'data' => $homeService
-        ], 200);
+            "success" => true,
+            "message" => "My Home Service Requests",
+            "data" => $requests
+        ]);
+    }
+
+    // ======================================================
+    // 📌 CEK HOME SERVICE AKTIF USER
+    // ======================================================
+    public function active(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                "success" => false,
+                "message" => "Unauthenticated"
+            ], 401);
+        }
+
+        $activeService = HomeService::where('user_id', $user->id)
+            ->whereIn('status', [
+                'pending',
+                'approved',
+                'on_process'
+            ])
+            ->latest()
+            ->first();
+
+        if ($activeService) {
+            return response()->json([
+                "success" => true,
+                "has_active" => true,
+                "message" => "Anda masih memiliki Home Service yang aktif",
+                "data" => $activeService
+            ]);
+        }
+
+        return response()->json([
+            "success" => true,
+            "has_active" => false,
+            "message" => "Tidak ada Home Service aktif"
+        ]);
     }
 }

@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'pages/auth/login_page.dart';
 import 'pages/auth/register_page.dart';
-import 'app/presentation/pages/dashboard_user_page.dart';
+import 'app/presentation/user/dashboard_user_page.dart';
+import 'app/presentation/admin/dashboard_admin_page.dart';
+
 import 'config/app_routes.dart';
 
 void main() {
@@ -23,7 +25,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BSM Clinic Center',
+      title: 'BSM Service Center',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: "Poppins",
@@ -39,6 +41,7 @@ class MyApp extends StatelessWidget {
         AppRoutes.login: (_) => LoginPage(),
         AppRoutes.register: (_) => RegisterPage(),
         AppRoutes.dashboard: (_) => const DashboardUserPage(),
+        AppRoutes.dashboardAdmin: (_) => const DashboardAdminPage(),
       },
       initialRoute: AppRoutes.login,
     );

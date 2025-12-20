@@ -22,8 +22,9 @@ class Promo extends Model
     ];
 
     // AUTO deactivate bila expired
-    public function getIsExpiredAttribute()
+    public function scopeExpired($query)
     {
-        return $this->end_date && $this->end_date < now();
+        return $query->whereNotNull('end_date')
+            ->where('end_date', '<', now());
     }
 }

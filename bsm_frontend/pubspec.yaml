@@ -40,6 +40,12 @@ dependencies:
   provider: ^6.1.5+1
   lucide_icons: ^0.257.0
   url_launcher: ^6.3.0
+  intl: ^0.20.2
+  open_filex: ^4.4.0
+  image_picker: ^1.2.1
+  universal_html: ^2.3.0
+  shimmer: ^3.0.0
+  image_gallery_saver: ^2.0.3
 
 dev_dependencies:
   flutter_test:

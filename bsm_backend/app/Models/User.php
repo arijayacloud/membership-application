@@ -26,15 +26,6 @@ class User extends Authenticatable
     ];
 
     // =================
-    // RELASI KE MEMBER
-    // =================
-    public function member()
-    {
-        return $this->hasOne(Member::class, 'phone', 'phone');
-        // user role 'user' akan punya profil member
-    }
-
-    // =================
     // ROLE CHECKER
     // =================
     public function isAdmin()
@@ -46,4 +37,9 @@ class User extends Authenticatable
     {
         return $this->role === 'user';
     }
+
+public function member()
+{
+    return $this->hasOne(Member::class);
+}
 }

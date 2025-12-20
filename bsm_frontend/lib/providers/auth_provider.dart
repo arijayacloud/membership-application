@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../storage/local_storage.dart';
 
 class AuthProvider extends ChangeNotifier {
   bool isLoading = false;
@@ -7,28 +8,28 @@ class AuthProvider extends ChangeNotifier {
   Map? user;
   String? errorMessage;
 
-  Future<bool> login(String email, String password) async {
-    _setLoading(true);
+Future<bool> login(String email, String password) async {
+  _setLoading(true);
 
-    try {
-      final res = await AuthService.login(email, password);
+  try {
+    final success = await AuthService.login(email, password);
 
-      if (res['success']) {
-        role = res['data']['user']['role'];
-        user = res['data']['user'];
-        errorMessage = null;
-        return true;
-      } else {
-        errorMessage = res['message'];
-        return false;
-      }
-    } catch (e) {
-      errorMessage = e.toString();
+    if (success) {
+      role = await LocalStorage.getRole();
+      user = await LocalStorage.getUser(); // jika ada
+      errorMessage = null;
+      return true;
+    } else {
+      errorMessage = "Email atau password salah";
       return false;
-    } finally {
-      _setLoading(false);
     }
+  } catch (e) {
+    errorMessage = "Terjadi kesalahan: $e";
+    return false;
+  } finally {
+    _setLoading(false);
   }
+}
 
   Future<bool> register({
     required String name,
