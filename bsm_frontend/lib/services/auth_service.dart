@@ -5,33 +5,39 @@ import 'api_service.dart';
 import '../storage/local_storage.dart';
 
 class AuthService {
-  static Future<bool> login(String email, String password) async {
+  static Future<Map<String, dynamic>> login(
+    String email,
+    String password,
+  ) async {
     try {
       final res = await ApiService.post("login", {
         "email": email,
         "password": password,
-      });
+      }).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(res.body);
+
+      debugPrint("STATUS: ${res.statusCode}");
+      debugPrint("BODY: ${res.body}");
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-
         final token = data['access_token'] ?? data['token'];
         final user = data['user'];
 
-        if (token == null || user == null) return false;
+        if (token == null || user == null) {
+          return {"success": false, "message": "Format response tidak valid"};
+        }
 
-        // Simpan ke local storage / shared preferences
         await LocalStorage.saveToken(token);
         await LocalStorage.saveRole(user['role']);
         await LocalStorage.saveUserId(user['id']);
 
-        return true;
+        return {"success": true, "role": user['role']};
       }
 
-      return false;
+      return {"success": false, "message": data['message'] ?? "Login gagal"};
     } catch (e) {
-      debugPrint("LOGIN ERROR: $e");
-      return false;
+      return {"success": false, "message": "Server tidak merespons"};
     }
   }
 

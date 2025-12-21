@@ -33,11 +33,18 @@ class _InfoPageState extends State<InfoPage> {
     }
   }
 
-  Future<void> _callPhone(String phone) async {
-    final uri = Uri.parse("tel:$phone");
+  Future<void> _openWhatsApp(String phone) async {
+    // pastikan format nomor: 628xxx (tanpa +, tanpa 0)
+    final formatted = phone.startsWith('0')
+        ? '62${phone.substring(1)}'
+        : phone.replaceAll('+', '');
+
+    final uri = Uri.parse("https://wa.me/$formatted");
 
     if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      throw "Tidak dapat membuka WhatsApp";
     }
   }
 
@@ -154,10 +161,10 @@ class _InfoPageState extends State<InfoPage> {
                               info['operational_hours'],
                             ),
                             _infoTile(
-                              Icons.phone,
-                              "Kontak",
+                              Icons.call,
+                              "WhatsApp",
                               info['phone'],
-                              onTap: () => _callPhone(info['phone']),
+                              onTap: () => _openWhatsApp(info['phone']),
                             ),
                           ],
                         ),

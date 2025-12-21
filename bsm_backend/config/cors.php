@@ -2,7 +2,7 @@
 
 return [
 
-    'paths' => ['api/*', 'export/*', 'storage/*', 'sanctum/csrf-cookie'], // ← tambahkan 'export/*'
+    'paths' => ['api/*', 'export/*', 'storage/*', 'media/*', 'sanctum/csrf-cookie'], // ← tambahkan 'export/*'
 
     'allowed_methods' => ['*'],
 

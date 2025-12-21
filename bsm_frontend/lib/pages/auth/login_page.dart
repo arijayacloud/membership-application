@@ -38,10 +38,7 @@ class _LoginPageState extends State<LoginPage> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF1F3C88),
-                        Color(0xFF3A6EA5),
-                      ],
+                      colors: [Color(0xFF1F3C88), Color(0xFF3A6EA5)],
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -181,7 +178,7 @@ class _LoginPageState extends State<LoginPage> {
                                   } else {
                                     ShowSnackBar.show(
                                       context,
-                                      "Login gagal, periksa kembali data Anda",
+                                      auth.errorMessage ?? "Login gagal",
                                       "error",
                                     );
                                   }

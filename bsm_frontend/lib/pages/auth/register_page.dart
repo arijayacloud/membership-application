@@ -336,8 +336,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
                 const SizedBox(height: 10),
                 Text(
-                  "Aplikasi Resmi BSM Service Center",
-                  style: TextStyle(color: Colors.grey[600]),
+                  "© BSM Service Center",
+                  style: TextStyle(color: Colors.grey.shade600),
                 ),
               ],
             ),
