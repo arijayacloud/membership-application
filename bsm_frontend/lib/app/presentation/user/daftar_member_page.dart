@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../services/api_service.dart';
 import 'dart:convert';
 import '../widgets/show_snackbar.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 class DaftarMemberPage extends StatefulWidget {
   const DaftarMemberPage({super.key});
@@ -43,6 +44,7 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
     super.initState();
     loadUserData(); // NEW
     loadMembershipTypes();
+    initializeDateFormatting('id_ID', null);
   }
 
   @override
@@ -161,15 +163,10 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
     ShowSnackBar.show(context, msg, isError ? "error" : "success");
   }
 
-  String formatDate(String? date) {
-    if (date == null) return "-";
-    try {
-      final parsed = DateTime.parse(date);
-      return DateFormat('dd-MM-yy').format(parsed);
-    } catch (_) {
-      return "-";
-    }
-  }
+  String formatDate(String isoDate) {
+  final date = DateTime.parse(isoDate).toLocal();
+  return DateFormat('dd MMMM yyyy', 'id_ID').format(date);
+}
 
   // ============================
   // UI
@@ -544,10 +541,10 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
           ),
           const SizedBox(height: 10),
           Text(
-            "Aktif hingga:\n${formatDate(memberData?['expired_at'])}",
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.grey),
-          ),
+  "Aktif hingga:\n${formatDate(memberData!['expired_at'])}",
+  textAlign: TextAlign.center,
+  style: const TextStyle(color: Colors.grey),
+),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,

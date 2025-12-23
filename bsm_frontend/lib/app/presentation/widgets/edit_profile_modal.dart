@@ -34,17 +34,9 @@ class _EditProfileModalState extends State<EditProfileModal> {
   bool isMember = false; // state
 
   @override
-  void dispose() {
-    nameCtrl.dispose();
-    phoneCtrl.dispose();
-    emailCtrl.dispose();
-    addressCtrl.dispose();
-    vehicleBrandCtrl.dispose();
-    vehicleModelCtrl.dispose();
-    vehicleSerialNumberCtrl.dispose();
-    passwordCtrl.dispose();
-    confirmPasswordCtrl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    loadData();
   }
 
   Future<void> loadData() async {
@@ -142,7 +134,6 @@ class _EditProfileModalState extends State<EditProfileModal> {
 
     if (passwordCtrl.text.isNotEmpty &&
         passwordCtrl.text != confirmPasswordCtrl.text) {
-      setState(() => loading = false);
       ShowSnackBar.show(context, "Konfirmasi password tidak cocok", "error");
       return;
     }
@@ -176,32 +167,34 @@ class _EditProfileModalState extends State<EditProfileModal> {
             // HEADER BLUE
             // ==========================
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(22, 28, 22, 26),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1F3C88), Color(0xFF3A6EA5)],
-                ),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-              ),
-              child: Row(
-                children: const [
-                  CircleAvatar(
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.edit, color: Color(0xFF1F3C88)),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    "Edit Profil",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+  width: double.infinity,
+  padding: const EdgeInsets.fromLTRB(22, 30, 22, 30),
+  decoration: const BoxDecoration(
+    gradient: LinearGradient(
+      colors: [Color(0xFF1F3C88), Color(0xFF3A6EA5)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+  ),
+  child: Row(
+    children: const [
+      CircleAvatar(
+        backgroundColor: Colors.white,
+        child: Icon(Icons.edit, color: Color(0xFF1F3C88)),
+      ),
+      SizedBox(width: 12),
+      Text(
+        "Edit Profil",
+        style: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ),
+    ],
+  ),
+),
 
             // ==========================
             // FORM
@@ -213,7 +206,6 @@ class _EditProfileModalState extends State<EditProfileModal> {
                 children: [
                   _card(
                     title: "Data Pribadi",
-                    icon: Icons.person,
                     children: [
                       _input("Nama Lengkap", nameCtrl),
                       const SizedBox(height: 14),
@@ -235,7 +227,6 @@ class _EditProfileModalState extends State<EditProfileModal> {
 
                   _card(
                     title: "Data Kendaraan",
-                    icon: Icons.motorcycle,
                     children: [
                       _vehicleDropdown(),
                       const SizedBox(height: 14),
@@ -249,7 +240,6 @@ class _EditProfileModalState extends State<EditProfileModal> {
 
                   _card(
                     title: "Keamanan Akun",
-                    icon: Icons.safety_check,
                     children: [
                       _passwordInput(
                         "Password Baru (opsional)",
@@ -288,141 +278,136 @@ class _EditProfileModalState extends State<EditProfileModal> {
   // CUSTOM INPUT FIELD
   // ==========================
   Widget _input(
-    String label,
-    TextEditingController controller, {
-    TextInputType keyboardType = TextInputType.text,
-    int maxLines = 1,
-  }) {
-    return Column(
+  String label,
+  TextEditingController controller, {
+  IconData? icon,
+  TextInputType keyboardType = TextInputType.text,
+  int maxLines = 1,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF1F3C88),
+        ),
+      ),
+      const SizedBox(height: 6),
+      TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        maxLines: maxLines,
+        decoration: InputDecoration(
+          prefixIcon: icon != null
+              ? Icon(icon, color: const Color(0xFF1F3C88))
+              : null,
+          filled: true,
+          fillColor: Colors.white,
+          hintText: label,
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 14,
+            horizontal: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFD0D7E1)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFD0D7E1)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(
+              color: Color(0xFF3A6EA5),
+              width: 1.6,
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+  Widget _card({required String title, required List<Widget> children}) {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 22),
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.06),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
+          title,
           style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
             color: Color(0xFF1F3C88),
           ),
         ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 14,
-              horizontal: 14,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFD0D7E1)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFD0D7E1)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFF3A6EA5),
-                width: 1.6,
-              ),
-            ),
-          ),
-        ),
+        const SizedBox(height: 18),
+        ...children,
       ],
-    );
-  }
-
-  Widget _card({
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 22),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: const Color(0xFF1F3C88)),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1F3C88),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ...children,
-        ],
-      ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _vehicleDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Tipe Kendaraan",
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1F3C88),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        "Tipe Kendaraan",
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF1F3C88),
+        ),
+      ),
+      const SizedBox(height: 6),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFD0D7E1)),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: selectedVehicleType,
+            hint: const Text("Pilih Tipe Kendaraan"),
+            isExpanded: true,
+            items: const [
+              DropdownMenuItem(
+                value: "Motor Listrik",
+                child: Text("Motor Listrik"),
+              ),
+              DropdownMenuItem(
+                value: "Sepeda Listrik",
+                child: Text("Sepeda Listrik"),
+              ),
+            ],
+            onChanged:
+                isMember ? (v) => setState(() => selectedVehicleType = v) : null,
           ),
         ),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Color(0xFFD0D7E1)),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: selectedVehicleType,
-              hint: const Text("Pilih Tipe Kendaraan"),
-              items: const [
-                DropdownMenuItem(
-                  value: "Motor Listrik",
-                  child: Text("Motor Listrik"),
-                ),
-                DropdownMenuItem(
-                  value: "Sepeda Listrik",
-                  child: Text("Sepeda Listrik"),
-                ),
-              ],
-              onChanged: isMember
-                  ? (v) => setState(() => selectedVehicleType = v)
-                  : null,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   Widget _passwordInput(
     String label,
@@ -466,25 +451,34 @@ class _EditProfileModalState extends State<EditProfileModal> {
   }
 
   Widget _saveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1F3C88),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          elevation: 3,
+  return SizedBox(
+    width: double.infinity,
+    height: 56,
+    child: ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF1F3C88),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
         ),
-        onPressed: loading ? null : save,
+        elevation: 4,
+      ),
+      onPressed: loading ? null : save,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
         child: loading
-            ? const CircularProgressIndicator(color: Colors.white)
+            ? const CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2,
+              )
             : const Text(
                 "Simpan Perubahan",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

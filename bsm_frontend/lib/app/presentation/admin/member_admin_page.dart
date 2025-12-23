@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:open_filex/open_filex.dart';
 import '../../../services/api_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:universal_html/html.dart' as html;
 import '../widgets/show_snackbar.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class MemberAdminPage extends StatefulWidget {
   const MemberAdminPage({super.key});
@@ -83,49 +85,101 @@ class _MemberAdminPageState extends State<MemberAdminPage> {
   }
 
   Future<void> exportExcel() async {
-    if (isLoading) return; // hindari export saat loading list
-    ShowSnackBar.show(context, "Sedang meng-export...", "warning");
+    if (isLoading) return;
 
-    final res = await ApiService.getFile("admin/members/export");
+    try {
+      ShowSnackBar.show(context, "Sedang meng-export...", "warning");
 
-    if (res.statusCode != 200) {
-      ShowSnackBar.show(context, "Gagal export: ${res.statusCode}", "error");
-      return;
-    }
+      final response = await ApiService.getFile("admin/members/export");
 
-    final bytes = res.bodyBytes;
-    String fileName = "data_member.xlsx";
-    final contentDisposition = res.headers["content-disposition"];
-    if (contentDisposition != null &&
-        contentDisposition.contains("filename=")) {
-      fileName = contentDisposition
-          .split("filename=")
-          .last
-          .replaceAll('"', "")
-          .trim();
-    }
-
-    if (kIsWeb) {
-      final blob = html.Blob([bytes]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..download = fileName
-        ..click();
-      html.Url.revokeObjectUrl(url);
-    } else {
-      Directory? dir;
-      try {
-        dir = await getDownloadsDirectory();
-      } catch (_) {
-        dir = await getTemporaryDirectory();
+      if (response.statusCode != 200) {
+        ShowSnackBar.show(
+          context,
+          "Gagal export: ${response.statusCode}",
+          "error",
+        );
+        return;
       }
 
-      final file = File("${dir!.path}/$fileName");
-      await file.writeAsBytes(bytes);
-      await OpenFilex.open(file.path);
-    }
+      final bytes = response.bodyBytes;
 
-    ShowSnackBar.show(context, "Export berhasil!", "success");
+      String fileName = "data_member.xlsx";
+      final contentDisposition = response.headers["content-disposition"];
+      if (contentDisposition != null &&
+          contentDisposition.toLowerCase().contains("filename=")) {
+        fileName = contentDisposition
+            .split("filename=")
+            .last
+            .replaceAll('"', '')
+            .trim();
+      }
+
+      // =========================
+      // 🌐 WEB
+      // =========================
+      if (kIsWeb) {
+        final blob = html.Blob([Uint8List.fromList(bytes)]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+
+        html.AnchorElement(href: url)
+          ..setAttribute("download", fileName)
+          ..click();
+
+        html.Url.revokeObjectUrl(url);
+
+        ShowSnackBar.show(context, "Export berhasil!", "success");
+        return;
+      }
+
+      // =========================
+      // 📱 MOBILE (ANDROID / IOS)
+      // =========================
+      bool permissionGranted = true;
+
+      if (Platform.isAndroid) {
+        // Android 13+ tidak perlu storage permission untuk Download
+        final sdkInt = await DeviceInfoPlugin().androidInfo.then(
+          (info) => info.version.sdkInt,
+        );
+
+        if (sdkInt < 30) {
+          final status = await Permission.storage.request();
+          permissionGranted = status.isGranted;
+        }
+      }
+
+      if (!permissionGranted) {
+        ShowSnackBar.show(context, "Izin penyimpanan ditolak", "warning");
+        return;
+      }
+
+      // =========================
+      // 📂 DOWNLOAD DIRECTORY
+      // =========================
+      Directory downloadDir;
+
+      if (Platform.isAndroid) {
+        downloadDir = Directory('/storage/emulated/0/Download');
+      } else {
+        downloadDir = await getApplicationDocumentsDirectory();
+      }
+
+      if (!await downloadDir.exists()) {
+        await downloadDir.create(recursive: true);
+      }
+
+      final filePath = "${downloadDir.path}/$fileName";
+      final file = File(filePath);
+      await file.writeAsBytes(bytes, flush: true);
+
+      ShowSnackBar.show(
+        context,
+        "Export berhasil disimpan di Download",
+        "success",
+      );
+    } catch (e) {
+      ShowSnackBar.show(context, "Gagal export: $e", "error");
+    }
   }
 
   Future<void> editMemberDialog(Map member) async {

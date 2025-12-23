@@ -2,5 +2,6 @@
 
 use Illuminate\Support\Facades\Schedule;
 
-Schedule::command('promo:deactivate-expired')
-    ->daily();
+Schedule::command('home-service:auto-cancel')
+    ->everyFiveMinutes(); // atau everyMinute()
+

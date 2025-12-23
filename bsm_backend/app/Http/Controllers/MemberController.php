@@ -52,62 +52,62 @@ class MemberController extends Controller
     }
 
     public function registerMember(Request $request)
-{
-    $request->validate([
-        'membership_type_id' => 'required|exists:membership_types,id',
-        'vehicle_type'       => 'nullable|string',
-        'vehicle_brand'      => 'nullable|string',
-        'vehicle_model'      => 'nullable|string',
-        'vehicle_serial_number' => 'nullable|string',
-        'address'            => 'nullable|string',
-        'city'               => 'nullable|string',
-    ]);
+    {
+        $request->validate([
+            'membership_type_id' => 'required|exists:membership_types,id',
+            'vehicle_type'       => 'nullable|string',
+            'vehicle_brand'      => 'nullable|string',
+            'vehicle_model'      => 'nullable|string',
+            'vehicle_serial_number' => 'nullable|string',
+            'address'            => 'nullable|string',
+            'city'               => 'nullable|string',
+        ]);
 
-    $user = Auth::user();
+        $user = Auth::user();
 
-    // 🔒 CEK: USER SUDAH JADI MEMBER
-    $existingMember = Member::where('user_id', $user->id)->first();
+        // 🔒 CEK: USER SUDAH JADI MEMBER
+        $existingMember = Member::where('user_id', $user->id)->first();
 
-    if ($existingMember) {
+        if ($existingMember) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda sudah terdaftar sebagai member'
+            ], 403);
+        }
+
+        // ================================
+        // LANJUT PROSES REGISTRASI
+        // ================================
+        $type = MembershipType::findOrFail($request->membership_type_id);
+
+        $count = Member::count() + 1;
+        $number = str_pad($count, 3, '0', STR_PAD_LEFT);
+        $memberCode = "MBR-" . $number . "-" . strtoupper($type->code);
+
+        $member = Member::create([
+            'user_id'            => $user->id,
+            'member_code'        => $memberCode,
+            'name'               => $user->name,
+            'phone'              => $user->phone,
+            'email'              => $user->email,
+            'membership_type_id' => $type->id,
+            'join_date'          => now(),
+            'expired_at'         => now()->addMonths($type->duration_months),
+            'vehicle_type'          => $request->vehicle_type,
+            'vehicle_brand'         => $request->vehicle_brand,
+            'vehicle_model'         => $request->vehicle_model,
+            'vehicle_serial_number' => $request->vehicle_serial_number,
+            'address' => $request->address,
+            'city'    => $request->city,
+            'status'  => 'active',
+        ]);
+
         return response()->json([
-            'success' => false,
-            'message' => 'Anda sudah terdaftar sebagai member'
-        ], 403);
+            'success' => true,
+            'message' => 'Member registered successfully',
+            'member'  => $member
+        ]);
     }
-
-    // ================================
-    // LANJUT PROSES REGISTRASI
-    // ================================
-    $type = MembershipType::findOrFail($request->membership_type_id);
-
-    $count = Member::count() + 1;
-    $number = str_pad($count, 3, '0', STR_PAD_LEFT);
-    $memberCode = "MBR-" . $number . "-" . strtoupper($type->code);
-
-    $member = Member::create([
-        'user_id'            => $user->id,
-        'member_code'        => $memberCode,
-        'name'               => $user->name,
-        'phone'              => $user->phone,
-        'email'              => $user->email,
-        'membership_type_id' => $type->id,
-        'join_date'          => now(),
-        'expired_at'         => now()->addMonths($type->duration_months),
-        'vehicle_type'          => $request->vehicle_type,
-        'vehicle_brand'         => $request->vehicle_brand,
-        'vehicle_model'         => $request->vehicle_model,
-        'vehicle_serial_number' => $request->vehicle_serial_number,
-        'address' => $request->address,
-        'city'    => $request->city,
-        'status'  => 'active',
-    ]);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Member registered successfully',
-        'member'  => $member
-    ]);
-}
 
     public function getMembershipTypes()
     {

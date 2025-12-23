@@ -761,6 +761,7 @@ class _PromoAdminPageState extends State<PromoAdminPage> {
                   children: [
                     Image.network(
                       "${AppConfig.baseUrl}/media/${promo['banner']}",
+                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
                       height: 180,
                       width: double.infinity,
                       fit: BoxFit.cover,

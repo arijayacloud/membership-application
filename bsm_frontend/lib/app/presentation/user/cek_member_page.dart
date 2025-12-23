@@ -1,13 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../services/api_service.dart';
 import 'digital_member_card_page.dart';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../widgets/show_snackbar.dart';
@@ -60,38 +60,66 @@ class _CekMemberPageState extends State<CekMemberPage> {
 
   Future<void> downloadCard() async {
     try {
-      RenderRepaintBoundary boundary =
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final boundary =
           cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
 
-      ui.Image image = await boundary.toImage(pixelRatio: 4);
-      ByteData? byteData = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      Uint8List pngBytes = byteData!.buffer.asUint8List();
+      final image = await boundary.toImage(pixelRatio: 4);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
 
+      if (byteData == null) {
+        throw Exception("Gagal generate gambar");
+      }
+
+      final pngBytes = byteData.buffer.asUint8List();
+      final fileName = "digital_member_${memberData!['member_code']}.png";
+
+      // =========================
+      // 🌐 WEB
+      // =========================
       if (kIsWeb) {
-        // 🔹 WEB: download langsung
         final blob = html.Blob([pngBytes], 'image/png');
         final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..download = "digital_member_${memberData!['member_code']}.png"
+
+        html.AnchorElement(href: url)
+          ..setAttribute("download", fileName)
           ..click();
+
         html.Url.revokeObjectUrl(url);
 
         ShowSnackBar.show(context, "Kartu berhasil diunduh 💳✨", "success");
-      } else {
-        // 🔹 ANDROID / IOS
-        await ImageGallerySaver.saveImage(
-          pngBytes,
-          name: "digital_member_${memberData!['member_code']}",
-        );
-
-        ShowSnackBar.show(
-          context,
-          "Kartu berhasil disimpan ke galeri 🎉",
-          "success",
-        );
+        return;
       }
+
+      // =========================
+      // 📱 ANDROID / IOS
+      // =========================
+      late Directory directory;
+
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Download');
+      } else if (Platform.isIOS) {
+        directory = await getApplicationDocumentsDirectory();
+      } else {
+        throw Exception("Platform tidak didukung");
+      }
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      final filePath = "${directory.path}/$fileName";
+      final file = File(filePath);
+      await file.writeAsBytes(pngBytes, flush: true);
+
+      ShowSnackBar.show(
+        context,
+        Platform.isAndroid
+            ? "Kartu tersimpan di Download 🎉"
+            : "Kartu tersimpan di Dokumen 🎉",
+        "success",
+      );
     } catch (e) {
       ShowSnackBar.show(context, "Gagal menyimpan kartu: $e", "error");
     }
