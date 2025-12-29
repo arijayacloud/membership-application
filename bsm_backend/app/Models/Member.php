@@ -12,18 +12,26 @@ class Member extends Model
 
     protected $table = 'members';
 
-   protected $fillable = [
-    'address',
-    'city',
-    'vehicle_type',
-    'vehicle_brand',
-    'vehicle_model',
-    'vehicle_serial_number'
-];
+    protected $fillable = [
+        'user_id',
+        'member_code',
+        'membership_type_id',
+        'join_date',
+        'expired_at',
+        'status',
 
-    protected $casts = [
-        'join_date'  => 'date',
-        'expired_at' => 'date',
+        // kendaraan
+        'vehicle_type',
+        'vehicle_brand',
+        'vehicle_model',
+        'vehicle_serial_number',
+
+        // alamat
+        'address',
+        'city',
+
+        // FOTO MEMBER
+        'member_photo',
     ];
 
     // =====================

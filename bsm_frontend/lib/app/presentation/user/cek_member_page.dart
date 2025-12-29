@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../services/api_service.dart';
 import 'digital_member_card_page.dart';
@@ -20,45 +19,38 @@ class CekMemberPage extends StatefulWidget {
 }
 
 class _CekMemberPageState extends State<CekMemberPage> {
-  final phoneCtrl = TextEditingController();
   final GlobalKey cardKey = GlobalKey();
 
-  Map? memberData;
-  bool loading = false;
+  List members = [];
+  bool loading = true;
 
-  Future cekMember() async {
-    final input = phoneCtrl.text.trim();
+  @override
+  void initState() {
+    super.initState();
+    fetchMyMembers();
+  }
 
-    if (input.isEmpty) {
-      _showError("Nomor HP atau Member Code tidak boleh kosong.");
-      return;
-    }
+  Future<void> fetchMyMembers() async {
+    try {
+      final res = await ApiService.get("member/me");
+      final body = jsonDecode(res.body);
 
-    setState(() => loading = true);
-
-    // Deteksi apakah input adalah nomor HP atau member_code
-    final isPhone = RegExp(r'^[0-9]+$').hasMatch(input);
-
-    final endpoint = isPhone
-        ? "member/check?phone=$input"
-        : "member/check?member_code=$input";
-
-    final res = await ApiService.get(endpoint);
-
-    if (!mounted) return;
-    setState(() => loading = false);
-
-    final body = jsonDecode(res.body);
-
-    if (res.statusCode == 200 && body['status'] == true) {
-      setState(() => memberData = body['member']);
-    } else {
-      setState(() => memberData = null);
-      _showError(body['message'] ?? "Member tidak ditemukan");
+      if (res.statusCode == 200 && body['status'] == true) {
+        setState(() {
+          members = body['members'];
+          loading = false;
+        });
+      } else {
+        loading = false;
+        _showError(body['message'] ?? "Belum memiliki member");
+      }
+    } catch (e) {
+      loading = false;
+      _showError("Gagal mengambil data member");
     }
   }
 
-  Future<void> downloadCard() async {
+  Future<void> downloadCard(Map memberData) async {
     try {
       await Future.delayed(const Duration(milliseconds: 100));
 
@@ -73,7 +65,7 @@ class _CekMemberPageState extends State<CekMemberPage> {
       }
 
       final pngBytes = byteData.buffer.asUint8List();
-      final fileName = "digital_member_${memberData!['member_code']}.png";
+      final fileName = "digital_member_${memberData['member_code']}.png";
 
       // =========================
       // 🌐 WEB
@@ -135,14 +127,12 @@ class _CekMemberPageState extends State<CekMemberPage> {
       backgroundColor: const Color(0xFFF6F9FC),
       body: Column(
         children: [
+          // =========================
+          // 🌈 HEADER
+          // =========================
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.only(
-              top: 40,
-              bottom: 26,
-              left: 20,
-              right: 20,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 44, 20, 28),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xFF1F3C88), Color(0xFF3A6EA5)],
@@ -154,153 +144,155 @@ class _CekMemberPageState extends State<CekMemberPage> {
                 bottomRight: Radius.circular(28),
               ),
             ),
-
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                // ======================================
-                // 🔙 BACK BUTTON + TITLE (tidak bertumpuk)
-                // ======================================
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          LucideIcons.arrowLeft,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
+                InkWell(
+                  onTap: () => Navigator.pop(context),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    const SizedBox(width: 12),
-                    const Text(
+                    child: const Icon(
+                      CupertinoIcons.arrow_left,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                       "Cek Member",
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 26,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    SizedBox(height: 4),
+                    Text(
+                      "Lihat informasi member Anda",
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
                   ],
-                ),
-
-                const SizedBox(height: 6),
-                const Text(
-                  "Masukkan nomor HP atau ID Member",
-                  style: TextStyle(color: Colors.white70, fontSize: 15),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 20),
-
+          // =========================
+          // 📦 CONTENT
+          // =========================
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // =======================
-                  // 🔍 SEARCH INPUT CARD STYLE
-                  // =======================
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: CupertinoTextField(
-                      controller: phoneCtrl,
-                      keyboardType: TextInputType.phone,
-                      placeholder: "Masukkan No HP / Member ID...",
-                      padding: const EdgeInsets.all(16),
-                      prefix: const Padding(
-                        padding: EdgeInsets.only(left: 10),
-                        child: Icon(CupertinoIcons.search, color: Colors.grey),
-                      ),
-                      decoration: const BoxDecoration(
-                        color: Colors.transparent,
-                      ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "Member Saya",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1F3C88),
                     ),
                   ),
-
                   const SizedBox(height: 16),
 
-                  // =======================
-                  // BUTTON ala Dashboard UI
-                  // =======================
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        backgroundColor: const Color(0xFF1F3C88),
-                        elevation: 3,
+                  if (loading)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 60),
+                      child: Center(
+                        child: CupertinoActivityIndicator(radius: 16),
                       ),
-                      onPressed: loading ? null : cekMember,
-                      child: loading
-                          ? const CupertinoActivityIndicator(
-                              color: Colors.white,
-                            )
-                          : const Text(
-                              "Cek Sekarang",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                    )
+                  else if (members.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 60),
+                      child: Center(
+                        child: Column(
+                          children: const [
+                            Icon(
+                              CupertinoIcons.person_crop_circle_badge_xmark,
+                              size: 64,
+                              color: Colors.grey,
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              "Anda belum terdaftar sebagai member",
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: members.length,
+                      itemBuilder: (context, index) {
+                        final member = members[index];
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 24),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.06),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
                               ),
-                            ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  if (memberData != null)
-                    Column(
-                      children: [
-                        RepaintBoundary(
-                          key: cardKey,
-                          child: DigitalMemberCard(
-                            name: memberData!['name'],
-                            memberCode: memberData!['member_code'],
-                            membershipType:
-                                memberData!['membership_type']['name'],
-                            expiredAt: memberData!['expired_at'],
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        ElevatedButton.icon(
-                          onPressed: downloadCard,
-                          icon: const Icon(Icons.download, color: Colors.white),
-                          label: const Text("Download Card"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1F3C88),
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 14,
-                              horizontal: 20,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
+                          child: Column(
+                            children: [
+                              RepaintBoundary(
+                                key: index == 0 ? cardKey : null,
+                                child: DigitalMemberCard(
+                                  name: member['name'],
+                                  memberCode: member['member_code'],
+                                  membershipType:
+                                      member['membership_type']['name'],
+                                  expiredAt: member['expired_at'],
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 46,
+                                child: ElevatedButton.icon(
+                                  onPressed: () => downloadCard(member),
+                                  icon: const Icon(Icons.download_rounded),
+                                  label: const Text(
+                                    "Download Kartu Member",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF1F3C88),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                 ],
               ),

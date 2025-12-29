@@ -90,18 +90,40 @@ class AuthController extends Controller
     // ==========================================
     // 👤 USER PROFILE (OPSIONAL)
     // ==========================================
-    public function profile(Request $request)
-    {
-        $user = $request->user();
-        $member = $user->member;
+public function profile(Request $request)
+{
+    $user = $request->user();
 
-        return response()->json([
-            'success'   => true,
-            'is_member' => $member !== null,
-            'user'      => $user,
-            'member'    => $member
-        ], 200);
-    }
+    $members = \App\Models\Member::where('user_id', $user->id)
+        ->orderBy('id')
+        ->get()
+        ->map(function ($m) {
+            return [
+                'id' => $m->id,
+                'address' => $m->address,
+                'vehicle_type' => $m->vehicle_type,
+                'vehicle_brand' => $m->vehicle_brand,
+                'vehicle_model' => $m->vehicle_model,
+                'vehicle_serial_number' => $m->vehicle_serial_number,
+
+                // 🔥 FIX UTAMA DI SINI
+                'member_photo_url' => $m->member_photo
+                    ? url('/media/' . $m->member_photo)
+                    : null,
+            ];
+        });
+
+    return response()->json([
+        'success' => true,
+        'user' => [
+            'id'    => $user->id,
+            'name'  => $user->name,
+            'phone' => $user->phone,
+            'email' => $user->email,
+        ],
+        'members' => $members,
+    ], 200);
+}
 
     // ==========================================
     // 🔄 REFRESH TOKEN (OPSIONAL)

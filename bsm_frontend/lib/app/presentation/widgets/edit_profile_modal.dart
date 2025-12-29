@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../widgets/show_snackbar.dart';
-import '../user/daftar_member_page.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class EditProfileModal extends StatefulWidget {
   const EditProfileModal({super.key});
@@ -31,7 +34,14 @@ class _EditProfileModalState extends State<EditProfileModal> {
   String? selectedVehicleType;
 
   bool loading = false;
-  bool isMember = false; // state
+  List<Map<String, dynamic>> members = [];
+  int? selectedMemberId;
+  Map<String, dynamic>? selectedMember;
+
+  File? memberPhotoFile; // mobile
+  Uint8List? memberPhotoBytes; // web
+  String? memberPhotoFilename; // web
+  String? memberPhotoUrl;
 
   @override
   void initState() {
@@ -39,115 +49,221 @@ class _EditProfileModalState extends State<EditProfileModal> {
     loadData();
   }
 
+  void selectMember(Map<String, dynamic> member) {
+    selectedMember = member;
+    selectedMemberId = member["id"];
+
+    addressCtrl.text = member["address"] ?? "";
+    selectedVehicleType = member["vehicle_type"];
+    vehicleBrandCtrl.text = member["vehicle_brand"] ?? "";
+    vehicleModelCtrl.text = member["vehicle_model"] ?? "";
+    vehicleSerialNumberCtrl.text = member["vehicle_serial_number"] ?? "";
+
+    // ✅ SIMPAN FOTO LAMA (TRIM)
+    memberPhotoUrl = member["member_photo_url"]?.toString().trim();
+
+    // reset foto baru
+    memberPhotoFile = null;
+    memberPhotoBytes = null;
+    memberPhotoFilename = null;
+
+    setState(() {});
+  }
+
   Future<void> loadData() async {
     try {
       setState(() => loading = true);
 
       final res = await ApiService.get("member/profile");
-
       if (res.statusCode != 200) {
         ShowSnackBar.show(context, "Gagal memuat data profil", "error");
         return;
       }
 
-      final json = jsonDecode(res.body);
+      final data = jsonDecode(res.body);
+      final user = data["user"];
 
-      final user = json["user"];
-      final member = json["member"];
-      isMember = json["is_member"] == true;
+      members = List<Map<String, dynamic>>.from(data["members"] ?? []);
 
-      // ======================
-      // USER (SELALU ADA)
-      // ======================
       nameCtrl.text = user?["name"] ?? "";
       phoneCtrl.text = user?["phone"] ?? "";
       emailCtrl.text = user?["email"] ?? "";
 
-      // ======================
-      // JIKA BELUM MEMBER
-      // ======================
-      if (!isMember || member == null) {
-        // Tampilkan snackbar dulu
-        ShowSnackBar.show(
-          context,
-          "Anda belum terdaftar sebagai member. Silakan daftar terlebih dahulu.",
-          "warning",
-        );
+      if (members.isNotEmpty) {
+        selectMember(members.first);
+      } else {
+        selectedMember = null;
+        selectedMember = null;
 
-        // Delay sebentar agar snackbar terlihat
-        Future.delayed(const Duration(milliseconds: 800), () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const DaftarMemberPage()),
-          );
-        });
-
-        selectedVehicleType = null;
         addressCtrl.clear();
+        selectedVehicleType = null;
         vehicleBrandCtrl.clear();
         vehicleModelCtrl.clear();
         vehicleSerialNumberCtrl.clear();
-
-        setState(() => loading = false);
-        return;
       }
-
-      // ======================
-      // JIKA SUDAH MEMBER
-      // ======================
-      addressCtrl.text = member["address"] ?? "";
-      selectedVehicleType = member["vehicle_type"];
-      vehicleBrandCtrl.text = member["vehicle_brand"] ?? "";
-      vehicleModelCtrl.text = member["vehicle_model"] ?? "";
-      vehicleSerialNumberCtrl.text = member["vehicle_serial_number"] ?? "";
-
-      setState(() => loading = false);
     } catch (e) {
-      setState(() => loading = false);
-
       ShowSnackBar.show(context, "Terjadi kesalahan: $e", "error");
+    } finally {
+      setState(() => loading = false);
     }
   }
 
-  Future save() async {
-    if (selectedVehicleType == null) {
-      ShowSnackBar.show(
-        context,
-        "Silakan daftar sebagai member terlebih dahulu",
-        "warning",
-      );
-      return;
+  Future<void> pickMemberPhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+
+    if (picked == null) return;
+
+    if (kIsWeb) {
+      memberPhotoBytes = await picked.readAsBytes();
+      memberPhotoFilename = picked.name;
+    } else {
+      memberPhotoFile = File(picked.path);
     }
 
-    setState(() => loading = true);
+    setState(() {});
+  }
 
-    final payload = {
-      "name": nameCtrl.text,
-      "phone": phoneCtrl.text,
-      "email": emailCtrl.text,
-      "address": addressCtrl.text,
-      "vehicle_type": selectedVehicleType,
-      "vehicle_brand": vehicleBrandCtrl.text,
-      "vehicle_model": vehicleModelCtrl.text,
-      "vehicle_serial_number": vehicleSerialNumberCtrl.text,
-    };
+  Future<void> save() async {
+    try {
+      setState(() => loading = true);
 
-    if (passwordCtrl.text.isNotEmpty &&
-        passwordCtrl.text != confirmPasswordCtrl.text) {
-      ShowSnackBar.show(context, "Konfirmasi password tidak cocok", "error");
-      return;
-    }
+      // ======================
+      // VALIDASI
+      // ======================
+      if (nameCtrl.text.trim().isEmpty) {
+        ShowSnackBar.show(context, "Nama wajib diisi", "error");
+        return;
+      }
 
-    final res = await ApiService.put("member/update-profile", payload);
+      if (phoneCtrl.text.trim().isEmpty) {
+        ShowSnackBar.show(context, "No telepon wajib diisi", "error");
+        return;
+      }
 
-    setState(() => loading = false);
+      if (passwordCtrl.text.isNotEmpty &&
+          passwordCtrl.text != confirmPasswordCtrl.text) {
+        ShowSnackBar.show(context, "Konfirmasi password tidak cocok", "error");
+        return;
+      }
 
-    if (res.statusCode == 200) {
+      if (selectedMember == null) {
+        ShowSnackBar.show(context, "Pilih member terlebih dahulu", "error");
+        return;
+      }
+
+      final memberId = selectedMember!["id"];
+
+      // ======================
+      // FIELDS
+      // ======================
+      final fields = <String, String>{
+        "_method": "PUT", // 🔥 WAJIB
+        "name": nameCtrl.text.trim(),
+        "phone": phoneCtrl.text.trim(),
+        "address": addressCtrl.text.trim(),
+        "vehicle_type": selectedVehicleType ?? "",
+        "vehicle_brand": vehicleBrandCtrl.text.trim(),
+        "vehicle_model": vehicleModelCtrl.text.trim(),
+        "vehicle_serial_number": vehicleSerialNumberCtrl.text.trim(),
+      };
+
+      if (emailCtrl.text.trim().isNotEmpty) {
+        fields["email"] = emailCtrl.text.trim();
+      }
+
+      if (passwordCtrl.text.isNotEmpty) {
+        fields["password"] = passwordCtrl.text;
+      }
+
+      // ======================
+      // REQUEST (SELALU MULTIPART)
+      // ======================
+      late final res;
+
+      if (kIsWeb && memberPhotoBytes != null) {
+        res = await ApiService.multipartPostBytes(
+          "member/$memberId/profile",
+          fields: fields,
+          bytes: memberPhotoBytes!,
+          filename: memberPhotoFilename!,
+          fieldName: "member_photo",
+        );
+      } else if (!kIsWeb && memberPhotoFile != null) {
+        res = await ApiService.multipartPost(
+          "member/$memberId/profile",
+          fields: fields,
+          files: {"member_photo": memberPhotoFile!},
+        );
+      } else {
+        // TANPA FOTO → tetap multipart
+        res = await ApiService.multipartPost(
+          "member/$memberId/profile",
+          fields: fields,
+          files: {},
+        );
+      }
+
+      // ======================
+      // RESPONSE
+      // ======================
+      if (res.statusCode != 200) {
+        final body = jsonDecode(res.body);
+        ShowSnackBar.show(
+          context,
+          body["message"] ?? "Gagal memperbarui profil",
+          "error",
+        );
+        return;
+      }
+
       Navigator.pop(context);
       ShowSnackBar.show(context, "Profil berhasil diperbarui", "success");
-    } else {
-      ShowSnackBar.show(context, "Gagal memperbarui profil", "error");
+    } catch (e) {
+      ShowSnackBar.show(context, "Terjadi kesalahan: $e", "error");
+    } finally {
+      setState(() => loading = false);
     }
+  }
+
+  void showFullImage(BuildContext context, ImageProvider image) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.95),
+      builder: (_) {
+        return GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Stack(
+              children: [
+                Center(
+                  child: InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 4.0,
+                    child: Image(image: image),
+                  ),
+                ),
+                Positioned(
+                  top: 40,
+                  right: 20,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -167,34 +283,34 @@ class _EditProfileModalState extends State<EditProfileModal> {
             // HEADER BLUE
             // ==========================
             Container(
-  width: double.infinity,
-  padding: const EdgeInsets.fromLTRB(22, 30, 22, 30),
-  decoration: const BoxDecoration(
-    gradient: LinearGradient(
-      colors: [Color(0xFF1F3C88), Color(0xFF3A6EA5)],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ),
-    borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-  ),
-  child: Row(
-    children: const [
-      CircleAvatar(
-        backgroundColor: Colors.white,
-        child: Icon(Icons.edit, color: Color(0xFF1F3C88)),
-      ),
-      SizedBox(width: 12),
-      Text(
-        "Edit Profil",
-        style: TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      ),
-    ],
-  ),
-),
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(22, 30, 22, 30),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1F3C88), Color(0xFF3A6EA5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              child: Row(
+                children: const [
+                  CircleAvatar(
+                    backgroundColor: Colors.white,
+                    child: Icon(Icons.edit, color: Color(0xFF1F3C88)),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    "Edit Profil",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
             // ==========================
             // FORM
@@ -222,6 +338,123 @@ class _EditProfileModalState extends State<EditProfileModal> {
                       ),
                       const SizedBox(height: 14),
                       _input("Alamat", addressCtrl, maxLines: 3),
+                    ],
+                  ),
+
+                  // ==========================
+                  // PILIH MEMBER
+                  // ==========================
+                  if (members.isNotEmpty)
+                    _card(
+                      title: "Pilih Member",
+                      children: [
+                        DropdownButtonFormField<int>(
+                          value: selectedMemberId,
+                          isExpanded: true,
+                          hint: const Text("Pilih Member"),
+                          items: members.map((m) {
+                            return DropdownMenuItem<int>(
+                              value: m["id"],
+                              child: Text(
+                                "${m["vehicle_type"] ?? "-"} • ${m["vehicle_brand"] ?? "-"}",
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (id) {
+                            if (id == null) return;
+                            final member = members.firstWhere(
+                              (m) => m["id"] == id,
+                            );
+                            selectMember(member);
+                          },
+                        ),
+                      ],
+                    ),
+
+                  _card(
+                    title: "Foto Member",
+                    children: [
+                      Center(
+                        child: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            // ======================
+                            // FOTO (PREVIEW)
+                            // ======================
+                            GestureDetector(
+                              onTap: () {
+                                final image = _memberPhotoProvider();
+                                if (image != null) {
+                                  showFullImage(context, image);
+                                }
+                              },
+                              child: CircleAvatar(
+                                radius: 60,
+                                backgroundColor: const Color(0xFFF4F6FA),
+                                backgroundImage: _memberPhotoProvider(),
+                                child: _memberPhotoProvider() == null
+                                    ? Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: const [
+                                          Icon(
+                                            Icons.person,
+                                            size: 36,
+                                            color: Color(0xFF1F3C88),
+                                          ),
+                                          SizedBox(height: 6),
+                                          Text(
+                                            "Belum ada foto",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFF1F3C88),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : null,
+                              ),
+                            ),
+
+                            // ======================
+                            // TOMBOL GANTI FOTO
+                            // ======================
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: selectedMember != null
+                                    ? pickMemberPhoto
+                                    : null,
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1F3C88),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.25),
+                                        blurRadius: 6,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        "Tap foto untuk melihat full screen\nTekan ikon kamera untuk mengganti foto",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                     ],
                   ),
 
@@ -278,136 +511,137 @@ class _EditProfileModalState extends State<EditProfileModal> {
   // CUSTOM INPUT FIELD
   // ==========================
   Widget _input(
-  String label,
-  TextEditingController controller, {
-  IconData? icon,
-  TextInputType keyboardType = TextInputType.text,
-  int maxLines = 1,
-}) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF1F3C88),
-        ),
-      ),
-      const SizedBox(height: 6),
-      TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          prefixIcon: icon != null
-              ? Icon(icon, color: const Color(0xFF1F3C88))
-              : null,
-          filled: true,
-          fillColor: Colors.white,
-          hintText: label,
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 14,
-            horizontal: 16,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFD0D7E1)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFD0D7E1)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(
-              color: Color(0xFF3A6EA5),
-              width: 1.6,
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-  Widget _card({required String title, required List<Widget> children}) {
-  return Container(
-    margin: const EdgeInsets.only(bottom: 22),
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.06),
-          blurRadius: 16,
-          offset: const Offset(0, 8),
-        ),
-      ],
-    ),
-    child: Column(
+    String label,
+    TextEditingController controller, {
+    IconData? icon,
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+  }) {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          title,
+          label,
           style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
             color: Color(0xFF1F3C88),
           ),
         ),
-        const SizedBox(height: 18),
-        ...children,
-      ],
-    ),
-  );
-}
-
-  Widget _vehicleDropdown() {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        "Tipe Kendaraan",
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF1F3C88),
-        ),
-      ),
-      const SizedBox(height: 6),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFD0D7E1)),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: selectedVehicleType,
-            hint: const Text("Pilih Tipe Kendaraan"),
-            isExpanded: true,
-            items: const [
-              DropdownMenuItem(
-                value: "Motor Listrik",
-                child: Text("Motor Listrik"),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            prefixIcon: icon != null
+                ? Icon(icon, color: const Color(0xFF1F3C88))
+                : null,
+            filled: true,
+            fillColor: Colors.white,
+            hintText: label,
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 14,
+              horizontal: 16,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFD0D7E1)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFD0D7E1)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xFF3A6EA5),
+                width: 1.6,
               ),
-              DropdownMenuItem(
-                value: "Sepeda Listrik",
-                child: Text("Sepeda Listrik"),
-              ),
-            ],
-            onChanged:
-                isMember ? (v) => setState(() => selectedVehicleType = v) : null,
+            ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _card({required String title, required List<Widget> children}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 22),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-    ],
-  );
-}
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F3C88),
+            ),
+          ),
+          const SizedBox(height: 18),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _vehicleDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Tipe Kendaraan",
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1F3C88),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFD0D7E1)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedVehicleType,
+              hint: const Text("Pilih Tipe Kendaraan"),
+              isExpanded: true,
+              items: const [
+                DropdownMenuItem(
+                  value: "Motor Listrik",
+                  child: Text("Motor Listrik"),
+                ),
+                DropdownMenuItem(
+                  value: "Sepeda Listrik",
+                  child: Text("Sepeda Listrik"),
+                ),
+              ],
+              onChanged: selectedMember != null
+                  ? (v) => setState(() => selectedVehicleType = v)
+                  : null,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _passwordInput(
     String label,
@@ -451,34 +685,50 @@ class _EditProfileModalState extends State<EditProfileModal> {
   }
 
   Widget _saveButton() {
-  return SizedBox(
-    width: double.infinity,
-    height: 56,
-    child: ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF1F3C88),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF1F3C88),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          elevation: 4,
         ),
-        elevation: 4,
-      ),
-      onPressed: loading ? null : save,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: loading
-            ? const CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              )
-            : const Text(
-                "Simpan Perubahan",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+        onPressed: loading ? null : save,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: loading
+              ? const CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                )
+              : const Text(
+                  "Simpan Perubahan",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-              ),
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
+
+  ImageProvider? _memberPhotoProvider() {
+    // 1️⃣ Foto BARU (prioritas tertinggi)
+    if (kIsWeb && memberPhotoBytes != null) {
+      return MemoryImage(memberPhotoBytes!);
+    }
+
+    if (!kIsWeb && memberPhotoFile != null) {
+      return FileImage(memberPhotoFile!);
+    }
+
+    // 2️⃣ Foto LAMA dari server (Flutter Web FIX)
+    if (memberPhotoUrl != null && memberPhotoUrl!.isNotEmpty) {
+      final url = "$memberPhotoUrl?v=${DateTime.now().millisecondsSinceEpoch}";
+      return NetworkImage(url);
+    }
+
+    return null;
+  }
 }

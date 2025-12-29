@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +7,9 @@ import '../../../services/api_service.dart';
 import 'dart:convert';
 import '../widgets/show_snackbar.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class DaftarMemberPage extends StatefulWidget {
   const DaftarMemberPage({super.key});
@@ -37,7 +42,13 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
   bool loadingUser = true; // NEW
 
   bool isAlreadyMember = false;
-  Map<String, dynamic>? memberData; // optional (untuk info)
+  Map<String, dynamic>? memberData;
+
+  final ImagePicker picker = ImagePicker();
+
+  File? memberPhotoFile; // MOBILE
+  Uint8List? memberPhotoBytes; // WEB
+  String? memberPhotoFilename; // WEB
 
   @override
   void initState() {
@@ -73,12 +84,6 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
         phoneCtrl.text = data["user"]["phone"] ?? "";
         emailCtrl.text = data["user"]["email"] ?? "";
       }
-
-      // 🔒 CEK SUDAH MEMBER ATAU BELUM
-      if (data["member"] != null) {
-        isAlreadyMember = true;
-        memberData = data["member"];
-      }
     } catch (e) {
       _showMsg("Gagal memuat data user", isError: true);
     } finally {
@@ -111,52 +116,180 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
     }
   }
 
+  Future<void> pickMemberPhoto({
+    ImageSource source = ImageSource.gallery,
+  }) async {
+    final picked = await picker.pickImage(
+      source: source,
+      imageQuality: 80,
+      maxWidth: 1024,
+    );
+
+    if (picked == null) return;
+
+    if (kIsWeb) {
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        memberPhotoBytes = bytes;
+        memberPhotoFilename = picked.name;
+        memberPhotoFile = null;
+      });
+    } else {
+      setState(() {
+        memberPhotoFile = File(picked.path);
+        memberPhotoBytes = null;
+        memberPhotoFilename = null;
+      });
+    }
+  }
+
   // ============================
   // SUBMIT FORM
   // ============================
-  Future daftar() async {
-    if (isAlreadyMember) {
-      _showMsg("Anda sudah terdaftar sebagai member", isError: true);
-      return;
-    }
-
+  Future<void> daftar() async {
+    // =====================
+    // VALIDASI
+    // =====================
     if (selectedMembership == null) {
-      _showMsg("Pilih tipe membership terlebih dahulu", isError: true);
+      _showMsg("Pilih jenis membership", isError: true);
       return;
     }
 
-    setState(() => loading = true);
-
-    final res = await ApiService.post("member/register", {
-      "membership_type_id": selectedMembership,
-      "vehicle_type": selectedVehicleType,
-      "vehicle_brand": brandCtrl.text,
-      "vehicle_model": modelCtrl.text,
-      "vehicle_serial_number": serialCtrl.text,
-      "address": addressCtrl.text,
-      "city": cityCtrl.text,
-    });
-
-    final data = jsonDecode(res.body);
-
-    setState(() => loading = false);
-
-    if (data['success']) {
-      _showMsg("Pendaftaran berhasil!");
-
-      brandCtrl.clear();
-      modelCtrl.clear();
-      serialCtrl.clear();
-      addressCtrl.clear();
-      cityCtrl.clear();
-
-      setState(() {
-        selectedVehicleType = null;
-        selectedMembership = null;
-      });
-    } else {
-      _showMsg(data['message'] ?? "Gagal mendaftar", isError: true);
+    if (selectedVehicleType == null ||
+        brandCtrl.text.isEmpty ||
+        modelCtrl.text.isEmpty ||
+        serialCtrl.text.isEmpty) {
+      _showMsg("Lengkapi data kendaraan", isError: true);
+      return;
     }
+
+    if (kIsWeb) {
+      if (memberPhotoBytes == null || memberPhotoFilename == null) {
+        _showMsg("Upload foto member terlebih dahulu", isError: true);
+        return;
+      }
+    } else {
+      if (memberPhotoFile == null) {
+        _showMsg("Upload foto member terlebih dahulu", isError: true);
+        return;
+      }
+    }
+
+    try {
+      setState(() => loading = true);
+
+      // =====================
+      // WEB
+      // =====================
+      if (kIsWeb) {
+        final response = await ApiService.multipartPostBytes(
+          "member/register",
+          fields: {
+            "membership_type_id": selectedMembership.toString(),
+            "vehicle_type": selectedVehicleType!,
+            "vehicle_brand": brandCtrl.text,
+            "vehicle_model": modelCtrl.text,
+            "vehicle_serial_number": serialCtrl.text,
+            "address": addressCtrl.text,
+            "city": cityCtrl.text,
+          },
+          bytes: memberPhotoBytes!,
+          filename: memberPhotoFilename!,
+          fieldName: "member_photo",
+        );
+
+        final body = await response.stream.bytesToString();
+        final data = jsonDecode(body);
+
+        _handleRegisterResponse(response.statusCode, data);
+      }
+      // =====================
+      // MOBILE
+      // =====================
+      else {
+        final response = await ApiService.multipartPost(
+          "member/register",
+          fields: {
+            "membership_type_id": selectedMembership.toString(),
+            "vehicle_type": selectedVehicleType!,
+            "vehicle_brand": brandCtrl.text,
+            "vehicle_model": modelCtrl.text,
+            "vehicle_serial_number": serialCtrl.text,
+            "address": addressCtrl.text,
+            "city": cityCtrl.text,
+          },
+          files: {"member_photo": memberPhotoFile!},
+        );
+
+        final body = await response.stream.bytesToString();
+        final data = jsonDecode(body);
+
+        _handleRegisterResponse(response.statusCode, data);
+      }
+    } catch (e) {
+      _showMsg("Error: $e", isError: true);
+    } finally {
+      setState(() => loading = false);
+    }
+  }
+
+  void _handleRegisterResponse(int statusCode, Map data) {
+    if (statusCode >= 200 && statusCode < 300) {
+      if (data["success"] == true) {
+        _showMsg("Pendaftaran berhasil. Foto menunggu verifikasi admin");
+
+        brandCtrl.clear();
+        modelCtrl.clear();
+        serialCtrl.clear();
+        addressCtrl.clear();
+        cityCtrl.clear();
+
+        setState(() {
+          selectedVehicleType = null;
+          selectedMembership = null;
+          selectedBenefits = null;
+          memberPhotoFile = null;
+          memberPhotoBytes = null;
+          memberPhotoFilename = null;
+        });
+      } else {
+        _showMsg(data["message"] ?? "Pendaftaran gagal", isError: true);
+      }
+    } else {
+      _showMsg(data["message"] ?? "Terjadi kesalahan server", isError: true);
+    }
+  }
+
+  void _showPhotoSourcePicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text("Ambil dari Kamera"),
+              onTap: () {
+                Navigator.pop(context);
+                pickMemberPhoto(source: ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text("Pilih dari Galeri"),
+              onTap: () {
+                Navigator.pop(context);
+                pickMemberPhoto(source: ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showMsg(String msg, {bool isError = false}) {
@@ -164,9 +297,9 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
   }
 
   String formatDate(String isoDate) {
-  final date = DateTime.parse(isoDate).toLocal();
-  return DateFormat('dd MMMM yyyy', 'id_ID').format(date);
-}
+    final date = DateTime.parse(isoDate).toLocal();
+    return DateFormat('dd MMMM yyyy', 'id_ID').format(date);
+  }
 
   // ============================
   // UI
@@ -186,8 +319,6 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
                 children: [
                   loadingUser
                       ? const Center(child: CupertinoActivityIndicator())
-                      : isAlreadyMember
-                      ? _alreadyMemberInfo()
                       : _formContent(),
 
                   const SizedBox(height: 40),
@@ -284,6 +415,53 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
           _readOnlyField(phoneCtrl, "Nomor HP", CupertinoIcons.phone_fill),
 
           const SizedBox(height: 24),
+
+          const SizedBox(height: 24),
+          _sectionTitle("Foto Member", icon: Icons.person),
+          const SizedBox(height: 12),
+
+          InkWell(
+            onTap: () {
+              if (kIsWeb) {
+                pickMemberPhoto(); // web langsung galeri
+              } else {
+                _showPhotoSourcePicker();
+              }
+            },
+            child: Center(
+              child: CircleAvatar(
+                radius: 60,
+                backgroundColor: const Color(0xFFF4F6FA),
+
+                // =====================
+                // IMAGE PREVIEW (WEB + MOBILE)
+                // =====================
+                backgroundImage: kIsWeb
+                    ? (memberPhotoBytes != null
+                          ? MemoryImage(memberPhotoBytes!)
+                          : null)
+                    : (memberPhotoFile != null
+                          ? FileImage(memberPhotoFile!)
+                          : null),
+
+                child:
+                    (kIsWeb && memberPhotoBytes == null) ||
+                        (!kIsWeb && memberPhotoFile == null)
+                    ? const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.camera_alt, color: primaryColor, size: 30),
+                          SizedBox(height: 6),
+                          Text(
+                            "Upload Foto",
+                            style: TextStyle(color: primaryColor),
+                          ),
+                        ],
+                      )
+                    : null,
+              ),
+            ),
+          ),
 
           _sectionTitle("Tipe Membership", icon: Icons.card_membership),
           const SizedBox(height: 12),
@@ -501,65 +679,6 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
                     child: Text(b, style: const TextStyle(fontSize: 14)),
                   ),
                 ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _alreadyMemberInfo() {
-    return Container(
-      padding: const EdgeInsets.all(26),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.verified, color: Colors.green, size: 48),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            "Anda Sudah Terdaftar sebagai Member",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-          Text(
-  "Aktif hingga:\n${formatDate(memberData!['expired_at'])}",
-  textAlign: TextAlign.center,
-  style: const TextStyle(color: Colors.grey),
-),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
-              child: const Text(
-                "Kembali",
-                style: TextStyle(color: Colors.white),
               ),
             ),
           ),

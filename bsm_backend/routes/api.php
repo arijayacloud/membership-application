@@ -49,9 +49,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // MEMBER
-    Route::get('/member/check', [MemberController::class, 'checkMember']);
+    Route::get('/member/me', [MemberController::class, 'myMember']);
     Route::post('/member/register', [MemberController::class, 'registerMember']);
-    Route::put('/member/update-profile', [MemberController::class, 'updateProfile']);
+    // USER
+    Route::put('/member/{memberId}/profile', [MemberController::class, 'updateProfile']);
 
     // 📌 USER - VIEW MEMBERSHIP TYPES
     Route::get('/membership-types', [MemberController::class, 'getMembershipTypes']);
@@ -90,6 +91,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/members/{id}', [MemberController::class, 'show']);
         Route::put('/admin/members/{id}', [MemberController::class, 'update']);
         Route::delete('/admin/members/{id}', [MemberController::class, 'destroy']);
+        Route::post(
+            'admin/members/{id}/validate',
+            [MemberController::class, 'validateMember']
+        );
 
         // PROMO ADMIN
         Route::get('/admin/promo', [PromoController::class, 'index']);

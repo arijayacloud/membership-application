@@ -292,6 +292,36 @@ class ApiService {
     }
   }
 
+  static Future<http.StreamedResponse> multipartPutBytes(
+  String endpoint, {
+  required Map<String, String> fields,
+  required Uint8List bytes,
+  required String filename,
+  required String fieldName,
+}) async {
+  final token = await LocalStorage.getToken();
+  final uri = Uri.parse("${AppConfig.baseUrl}/api/$endpoint");
+
+  final req = http.MultipartRequest("PUT", uri);
+  req.headers.addAll({
+    "Accept": "application/json",
+    if (token != null) "Authorization": "Bearer $token",
+  });
+
+  req.fields.addAll(fields);
+
+  req.files.add(
+    http.MultipartFile.fromBytes(
+      fieldName,
+      bytes,
+      filename: filename,
+      contentType: _getImageMediaType(filename),
+    ),
+  );
+
+  return req.send();
+}
+
   static Future<Map<String, dynamic>> registerHomeService({
     required String serviceType,
     required String scheduleDate,

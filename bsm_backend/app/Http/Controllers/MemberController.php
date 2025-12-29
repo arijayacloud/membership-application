@@ -11,6 +11,9 @@ use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class MemberController extends Controller
 {
@@ -51,62 +54,146 @@ class MemberController extends Controller
         ]);
     }
 
+    public function myMember(Request $request)
+    {
+        $user = $request->user();
+
+        $members = Member::with(['membershipType', 'user'])
+            ->where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'status' => true,
+            'members' => $members->map(function ($member) {
+                return [
+                    'name' => $member->user->name,
+                    'member_code' => $member->member_code,
+
+                    // UNIT KENDARAAN
+                    'vehicle_type' => $member->vehicle_type,
+                    'vehicle_brand' => $member->vehicle_brand,
+                    'vehicle_model' => $member->vehicle_model,
+                    'vehicle_serial_number' => $member->vehicle_serial_number,
+
+                    // MEMBERSHIP
+                    'membership_type' => [
+                        'id' => $member->membershipType->id,
+                        'name' => $member->membershipType->name,
+                        'code' => $member->membershipType->code,
+                        'duration_months' => $member->membershipType->duration_months,
+                    ],
+
+                    'join_date' => Carbon::parse($member->join_date)
+                        ->locale('id')
+                        ->translatedFormat('d F Y'),
+
+                    'expired_at' => $member->expired_at
+                        ? Carbon::parse($member->expired_at)
+                        ->locale('id')
+                        ->translatedFormat('d F Y')
+                        : null,
+
+                    'status' => $member->status,
+                ];
+            }),
+        ]);
+    }
+
     public function registerMember(Request $request)
     {
+        // =========================
+        // 1️⃣ VALIDASI INPUT
+        // =========================
         $request->validate([
-            'membership_type_id' => 'required|exists:membership_types,id',
-            'vehicle_type'       => 'nullable|string',
-            'vehicle_brand'      => 'nullable|string',
-            'vehicle_model'      => 'nullable|string',
-            'vehicle_serial_number' => 'nullable|string',
-            'address'            => 'nullable|string',
-            'city'               => 'nullable|string',
+            'membership_type_id'      => 'required|exists:membership_types,id',
+            'vehicle_type'            => 'required|string',
+            'vehicle_brand'           => 'required|string',
+            'vehicle_model'           => 'required|string',
+            'vehicle_serial_number'   => 'required|string',
+
+            // 🔥 upload bukti (wajib)
+            'member_photo' => 'required|image|mimes:jpg,jpeg,png',
+
+            'address'                 => 'nullable|string',
+            'city'                    => 'nullable|string',
         ]);
 
+        // =========================
+        // 2️⃣ AUTH USER
+        // =========================
         $user = Auth::user();
 
-        // 🔒 CEK: USER SUDAH JADI MEMBER
-        $existingMember = Member::where('user_id', $user->id)->first();
+        // =========================
+        // 3️⃣ CEK DUPLIKASI UNIT
+        // =========================
+        $unitExists = Member::where('user_id', $user->id)
+            ->where('vehicle_serial_number', $request->vehicle_serial_number)
+            ->exists();
 
-        if ($existingMember) {
+        if ($unitExists) {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda sudah terdaftar sebagai member'
-            ], 403);
+                'message' => 'Unit kendaraan ini sudah terdaftar sebagai member'
+            ], 409);
         }
 
-        // ================================
-        // LANJUT PROSES REGISTRASI
-        // ================================
+        // =========================
+        // 4️⃣ SIMPAN FOTO BUKTI
+        // =========================
+        $photoPath = $request->file('member_photo')
+            ->store('member-photo', 'public');
+
+        // =========================
+        // 5️⃣ AMBIL TIPE MEMBERSHIP
+        // =========================
         $type = MembershipType::findOrFail($request->membership_type_id);
 
+        // =========================
+        // 6️⃣ GENERATE MEMBER CODE
+        // =========================
         $count = Member::count() + 1;
         $number = str_pad($count, 3, '0', STR_PAD_LEFT);
         $memberCode = "MBR-" . $number . "-" . strtoupper($type->code);
 
+        // =========================
+        // 7️⃣ SIMPAN DATA MEMBER
+        // =========================
         $member = Member::create([
-            'user_id'            => $user->id,
-            'member_code'        => $memberCode,
-            'name'               => $user->name,
-            'phone'              => $user->phone,
-            'email'              => $user->email,
-            'membership_type_id' => $type->id,
-            'join_date'          => now(),
-            'expired_at'         => now()->addMonths($type->duration_months),
+            'user_id'               => $user->id,
+            'member_code'           => $memberCode,
+            'membership_type_id'    => $type->id,
+
+            'join_date'             => now(),
+            'expired_at'            => Carbon::now()->addMonths($type->duration_months),
+
+            // kendaraan
             'vehicle_type'          => $request->vehicle_type,
             'vehicle_brand'         => $request->vehicle_brand,
             'vehicle_model'         => $request->vehicle_model,
             'vehicle_serial_number' => $request->vehicle_serial_number,
-            'address' => $request->address,
-            'city'    => $request->city,
-            'status'  => 'active',
+
+            // alamat
+            'address'               => $request->address,
+            'city'                  => $request->city,
+
+            // FOTO MEMBER
+            'member_photo'          => $photoPath,
+
+            'status'                => 'pending',
         ]);
 
+        // =========================
+        // 8️⃣ RESPONSE
+        // =========================
         return response()->json([
             'success' => true,
-            'message' => 'Member registered successfully',
-            'member'  => $member
-        ]);
+            'message' => 'Pendaftaran member berhasil. Menunggu validasi admin.',
+            'member'  => [
+                'member_code' => $member->member_code,
+                'status'      => $member->status,
+            ]
+        ], 201);
     }
 
     public function getMembershipTypes()
@@ -134,19 +221,30 @@ class MemberController extends Controller
         }
 
         // VALIDASI
-        $validated = $request->validate([
-            'name'   => 'required|string|max:255',
-            'phone'  => 'required|string|unique:users,phone,' . $user->id,
-            'email'  => 'nullable|email|unique:users,email,' . $user->id,
+        // ======================
+        // 🔴 VALIDASI (DEBUG MODE)
+        // ======================
+        try {
+            $validated = $request->validate([
+                'name'   => 'required|string|max:255',
+                'phone'  => 'required|string|unique:users,phone,' . $user->id,
+                'email'  => 'nullable|email|unique:users,email,' . $user->id,
 
-            'address' => 'nullable|string',
-            'city'    => 'nullable|string',
-            'vehicle_type'  => 'nullable|string',
-            'vehicle_brand' => 'nullable|string',
-            'vehicle_model' => 'nullable|string',
-            'vehicle_serial_number' => 'nullable|string',
-        ]);
-
+                'address' => 'nullable|string',
+                'city'    => 'nullable|string',
+                'vehicle_type'  => 'nullable|string',
+                'vehicle_brand' => 'nullable|string',
+                'vehicle_model' => 'nullable|string',
+                'vehicle_serial_number' => 'nullable|string',
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors'  => $e->errors(),
+                'payload' => $request->all(),
+            ], 422);
+        }
         // ======================
         // 🔵 UPDATE USER
         // ======================
@@ -158,6 +256,20 @@ class MemberController extends Controller
                 'email' => $validated['email'] ?? $user->email,
                 'updated_at' => now(),
             ]);
+
+        $memberPhotoPath = $member->member_photo;
+
+        if ($request->hasFile('member_photo')) {
+
+            // hapus foto lama jika ada
+            if ($member->member_photo && Storage::disk('public')->exists($member->member_photo)) {
+                Storage::disk('public')->delete($member->member_photo);
+            }
+
+            // simpan foto baru
+            $memberPhotoPath = $request->file('member_photo')
+                ->store('member_photos', 'public');
+        }
 
         // ======================
         // 🔵 UPDATE MEMBER
@@ -171,6 +283,10 @@ class MemberController extends Controller
                 'vehicle_brand' => $validated['vehicle_brand'] ?? $member->vehicle_brand,
                 'vehicle_model' => $validated['vehicle_model'] ?? $member->vehicle_model,
                 'vehicle_serial_number' => $validated['vehicle_serial_number'] ?? $member->vehicle_serial_number,
+
+                // 🔵 FOTO
+                'member_photo' => $memberPhotoPath,
+
                 'updated_at' => now(),
             ]);
 
@@ -251,85 +367,114 @@ class MemberController extends Controller
     // ✏️ UPDATE MEMBER
     // ==================================================
     public function update(Request $request, $id)
-    {
-        $member = Member::with('user')->find($id);
+{
+    $member = Member::with('user')->find($id);
 
-        if (!$member) {
+    if (!$member) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Member not found'
+        ], 404);
+    }
+
+    $user = $member->user;
+
+    // ======================
+    // VALIDASI
+    // ======================
+    $request->validate([
+        // USER
+        'name'  => 'required|string',
+        'phone' => 'required|string|unique:users,phone,' . $user->id,
+        'email' => 'nullable|email|unique:users,email,' . $user->id,
+
+        // MEMBER
+        'membership_type_id' => 'nullable|exists:membership_types,id',
+        'status' => 'nullable|in:active,pending,expired,non_active',
+
+        'vehicle_type' => 'nullable|string',
+        'vehicle_brand' => 'nullable|string',
+        'vehicle_model' => 'nullable|string',
+        'vehicle_serial_number' => 'nullable|string',
+        'address' => 'nullable|string',
+        'city' => 'nullable|string',
+
+        // 📸 FOTO MEMBER
+        'member_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp',
+    ]);
+
+    // ======================
+    // VALIDASI DUPLIKASI UNIT
+    // ======================
+    if ($request->filled('vehicle_serial_number')) {
+        $exists = Member::where('user_id', $user->id)
+            ->where('vehicle_serial_number', $request->vehicle_serial_number)
+            ->where('id', '!=', $member->id)
+            ->exists();
+
+        if ($exists) {
             return response()->json([
                 'success' => false,
-                'message' => 'Member not found'
-            ], 404);
+                'message' => 'Unit kendaraan ini sudah terdaftar'
+            ], 409);
         }
-
-        $user = $member->user;
-
-        // =========================
-        // VALIDASI
-        // =========================
-        $request->validate([
-            // USER
-            'name'  => 'required|string',
-            'phone' => 'required|string|unique:users,phone,' . $user->id,
-            'email' => 'nullable|email|unique:users,email,' . $user->id,
-
-            // MEMBER
-            'membership_type_id' => 'nullable|exists:membership_types,id',
-            'status' => 'nullable|in:active,non_active,expired,pending',
-
-            'vehicle_type' => 'nullable|string',
-            'vehicle_brand' => 'nullable|string',
-            'vehicle_model' => 'nullable|string',
-            'vehicle_serial_number' => 'nullable|string',
-            'address' => 'nullable|string',
-            'city' => 'nullable|string',
-        ]);
-
-        // =========================
-        // UPDATE USER
-        // =========================
-        $user->update([
-            'name'  => $request->name,
-            'phone' => $request->phone,
-            'email' => $request->email,
-        ]);
-
-        // =========================
-        // UPDATE MEMBERSHIP (JIKA DIUBAH)
-        // =========================
-        if (
-            $request->filled('membership_type_id') &&
-            $request->membership_type_id != $member->membership_type_id
-        ) {
-            $type = MembershipType::findOrFail($request->membership_type_id);
-
-            $count = Member::count() + 1;
-            $number = str_pad($count, 3, '0', STR_PAD_LEFT);
-            $memberCode = "MBR-$number-" . strtoupper($type->code);
-
-            $member->membership_type_id = $type->id;
-            $member->expired_at = now()->addMonths($type->duration_months);
-            $member->member_code = $memberCode;
-        }
-
-        // =========================
-        // UPDATE MEMBER
-        // =========================
-        $member->update([
-            'status' => $request->status ?? $member->status,
-            'vehicle_type' => $request->vehicle_type,
-            'vehicle_brand' => $request->vehicle_brand,
-            'vehicle_model' => $request->vehicle_model,
-            'vehicle_serial_number' => $request->vehicle_serial_number,
-            'address' => $request->address,
-            'city' => $request->city,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Member updated successfully',
-            'member' => $member->load('user')
-        ]);
     }
+
+    // ======================
+    // UPDATE USER
+    // ======================
+    $user->update([
+        'name'  => $request->name,
+        'phone' => $request->phone,
+        'email' => $request->email,
+    ]);
+
+    // ======================
+    // UPDATE MEMBERSHIP TYPE
+    // ======================
+    if ($request->filled('membership_type_id')) {
+        $type = MembershipType::findOrFail($request->membership_type_id);
+        $member->membership_type_id = $type->id;
+        $member->expired_at = now()->addMonths($type->duration_months);
+    }
+
+    // ======================
+    // 📸 UPLOAD FOTO MEMBER
+    // ======================
+    if ($request->hasFile('member_photo')) {
+
+        // hapus foto lama (jika ada)
+        if ($member->member_photo && Storage::disk('public')->exists($member->member_photo)) {
+            Storage::disk('public')->delete($member->member_photo);
+        }
+
+        $path = $request->file('member_photo')->store(
+            'member_photos',
+            'public'
+        );
+
+        $member->member_photo = $path;
+    }
+
+    // ======================
+    // UPDATE MEMBER
+    // ======================
+    $member->update([
+        'status' => $request->status ?? $member->status,
+        'vehicle_type' => $request->vehicle_type,
+        'vehicle_brand' => $request->vehicle_brand,
+        'vehicle_model' => $request->vehicle_model,
+        'vehicle_serial_number' => $request->vehicle_serial_number,
+        'address' => $request->address,
+        'city' => $request->city,
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Member updated successfully',
+        'member' => $member->load('user', 'membershipType'),
+    ]);
+}
 
     // ==================================================
     // 🗑 DELETE MEMBER
@@ -393,4 +538,23 @@ class MemberController extends Controller
             ]
         );
     }
+
+    public function validateMember($id)
+{
+    $member = Member::findOrFail($id);
+
+    if (!$member->member_photo) {
+        return response()->json([
+            'message' => 'Foto member belum ada'
+        ], 422);
+    }
+
+    $member->update([
+        'status' => 'active'
+    ]);
+
+    return response()->json([
+        'message' => 'Member berhasil divalidasi'
+    ]);
+}
 }
