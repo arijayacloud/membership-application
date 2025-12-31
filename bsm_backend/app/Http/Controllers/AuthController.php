@@ -101,6 +101,7 @@ public function profile(Request $request)
             return [
                 'id' => $m->id,
                 'address' => $m->address,
+                'city' => $m->city,
                 'vehicle_type' => $m->vehicle_type,
                 'vehicle_brand' => $m->vehicle_brand,
                 'vehicle_model' => $m->vehicle_model,

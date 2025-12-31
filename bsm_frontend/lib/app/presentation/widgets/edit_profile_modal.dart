@@ -20,6 +20,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
   final phoneCtrl = TextEditingController();
   final emailCtrl = TextEditingController();
   final addressCtrl = TextEditingController();
+  final cityCtrl = TextEditingController();
 
   final vehicleBrandCtrl = TextEditingController();
   final vehicleModelCtrl = TextEditingController();
@@ -54,6 +55,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
     selectedMemberId = member["id"];
 
     addressCtrl.text = member["address"] ?? "";
+    cityCtrl.text = member["city"] ?? "";
     selectedVehicleType = member["vehicle_type"];
     vehicleBrandCtrl.text = member["vehicle_brand"] ?? "";
     vehicleModelCtrl.text = member["vehicle_model"] ?? "";
@@ -96,6 +98,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
         selectedMember = null;
 
         addressCtrl.clear();
+        cityCtrl.clear();
         selectedVehicleType = null;
         vehicleBrandCtrl.clear();
         vehicleModelCtrl.clear();
@@ -164,6 +167,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
         "name": nameCtrl.text.trim(),
         "phone": phoneCtrl.text.trim(),
         "address": addressCtrl.text.trim(),
+        "city": cityCtrl.text.trim(),
         "vehicle_type": selectedVehicleType ?? "",
         "vehicle_brand": vehicleBrandCtrl.text.trim(),
         "vehicle_model": vehicleModelCtrl.text.trim(),
@@ -338,6 +342,8 @@ class _EditProfileModalState extends State<EditProfileModal> {
                       ),
                       const SizedBox(height: 14),
                       _input("Alamat", addressCtrl, maxLines: 3),
+                      const SizedBox(height: 14),
+                      _input("Kota/Kabupaten", cityCtrl, maxLines: 3),
                     ],
                   ),
 
