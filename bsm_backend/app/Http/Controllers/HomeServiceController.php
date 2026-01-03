@@ -74,18 +74,20 @@ class HomeServiceController extends Controller
         // ===============================
         // 🔒 CEK MEMBER
         // ===============================
-        $member = $user->member;
+        $member = $user->members()
+            ->where('id', $request->member_id)
+            ->first();
         if (!$member) {
             return response()->json([
                 "success" => false,
-                "message" => "Anda belum menjadi member, tidak dapat mengajukan Home Service"
+                "message" => "Member tidak valid atau bukan milik Anda"
             ], 403);
         }
 
         // ===============================
         // 🚫 CEK HOME SERVICE AKTIF
         // ===============================
-        $hasActive = HomeService::where('user_id', $user->id)
+        $hasActive = HomeService::where('member_id', $member->id)
             ->whereIn('status', ['pending', 'approved', 'on_process'])
             ->exists();
 
@@ -99,6 +101,7 @@ class HomeServiceController extends Controller
         // ✅ VALIDASI INPUT
         // ===============================
         $validated = $request->validate([
+            'member_id'           => 'required|exists:members,id',
             'service_type'        => 'required|string',
             'schedule_date'       => 'required|date',
             'schedule_time'       => 'required|date_format:H:i',
@@ -140,7 +143,7 @@ class HomeServiceController extends Controller
             'city'                => $finalCity,
             'problem_description' => $validated['problem_description'] ?? null,
             'problem_photo'       => $problemPhotoPath,
-            'status'              => 'pending', // 🔥 PENTING
+            'status'              => 'pending',
         ]);
 
         // ===============================
@@ -308,19 +311,33 @@ class HomeServiceController extends Controller
     }
 
     public function myRequests(Request $request)
-    {
-        $user = $request->user();
+{
+    $user = $request->user();
 
-        $requests = HomeService::where('user_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->get();
+    $memberIds = $user->members()->pluck('id');
 
+    if ($memberIds->isEmpty()) {
         return response()->json([
             "success" => true,
-            "message" => "My Home Service Requests",
-            "data" => $requests
+            "message" => "User belum memiliki member",
+            "data" => []
         ]);
     }
+
+    $requests = HomeService::with([
+        'member:id,user_id,member_code,vehicle_type',
+        'member.user:id,name'
+    ])
+    ->whereIn('member_id', $memberIds)
+    ->orderBy('created_at', 'desc')
+    ->get();
+
+    return response()->json([
+        "success" => true,
+        "message" => "My Home Service Requests",
+        "data" => $requests
+    ]);
+}
 
     // ======================================================
     // 📌 CEK HOME SERVICE AKTIF USER

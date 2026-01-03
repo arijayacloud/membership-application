@@ -49,7 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // MEMBER
-    Route::get('/member/me', [MemberController::class, 'myMember']);
+    Route::get('/members', [MemberController::class, 'myMembers']);
     Route::post('/member/register', [MemberController::class, 'registerMember']);
     // USER
     Route::put('/member/{memberId}/profile', [MemberController::class, 'updateProfile']);

@@ -16,6 +16,9 @@ class _HomeServiceHistoryPageState extends State<HomeServiceHistoryPage> {
   List<Map<String, dynamic>> items = [];
   bool loading = true;
 
+  int? selectedMemberId;
+  List<Map<String, dynamic>> members = [];
+
   @override
   void initState() {
     super.initState();
@@ -29,9 +32,7 @@ class _HomeServiceHistoryPageState extends State<HomeServiceHistoryPage> {
     try {
       final res = await ApiService.get("home-service/my");
 
-      print("⏩ REQUEST: home-service/my");
-      print("⏩ STATUS: ${res.statusCode}");
-      print("⏩ BODY: ${res.body}");
+      if (!mounted) return; // 🔥 WAJIB
 
       if (res.statusCode != 200) {
         throw "Server mengembalikan status ${res.statusCode}";
@@ -42,12 +43,29 @@ class _HomeServiceHistoryPageState extends State<HomeServiceHistoryPage> {
       setState(() {
         items = List<Map<String, dynamic>>.from(json["data"] ?? []);
         loading = false;
+
+        // Ambil member unik
+        final map = <int, Map<String, dynamic>>{};
+        for (final item in items) {
+          final member = item["member"];
+          if (member != null) {
+            map[member["id"]] = member;
+          }
+        }
+        members = map.values.toList();
       });
     } catch (e) {
-      print("❌ ERROR: $e");
+      if (!mounted) return; // 🔥 WAJIB
+
       setState(() => loading = false);
       ShowSnackBar.show(context, "Gagal memuat riwayat: $e", "error");
     }
+  }
+
+  List<Map<String, dynamic>> get filteredItems {
+    if (selectedMemberId == null) return items;
+
+    return items.where((e) => e["member"]?["id"] == selectedMemberId).toList();
   }
 
   // ----------------------------
@@ -76,11 +94,13 @@ class _HomeServiceHistoryPageState extends State<HomeServiceHistoryPage> {
       ),
     );
 
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
 
     try {
       final res = await ApiService.post("/home-service/$id/cancel", {});
       final data = jsonDecode(res.body);
+
+      if (!mounted) return;
 
       ShowSnackBar.show(
         context,
@@ -88,8 +108,10 @@ class _HomeServiceHistoryPageState extends State<HomeServiceHistoryPage> {
         data['success'] == true ? "success" : "error",
       );
 
-      loadHistory();
+      loadHistory(); // aman, karena loadHistory sudah pakai mounted
     } catch (e) {
+      if (!mounted) return;
+
       ShowSnackBar.show(context, "Gagal membatalkan: $e", "error");
     }
   }
@@ -104,7 +126,7 @@ class _HomeServiceHistoryPageState extends State<HomeServiceHistoryPage> {
       case "approved":
         return Colors.blue;
       case "on_process":
-  return Colors.amber.shade800;
+        return Colors.amber.shade800;
       case "done":
         return Colors.green;
       case "rejected":
@@ -114,11 +136,25 @@ class _HomeServiceHistoryPageState extends State<HomeServiceHistoryPage> {
     }
   }
 
+  Color memberColor(int memberId) {
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.indigo,
+    ];
+    return colors[memberId % colors.length];
+  }
+
   String formatDate(String? date) {
     if (date == null || date.isEmpty) return "-";
     try {
-      return DateFormat("EEEE, d MMM yyyy", "id_ID")
-          .format(DateTime.parse(date));
+      return DateFormat(
+        "EEEE, d MMM yyyy",
+        "id_ID",
+      ).format(DateTime.parse(date));
     } catch (_) {
       return date;
     }
@@ -134,108 +170,188 @@ class _HomeServiceHistoryPageState extends State<HomeServiceHistoryPage> {
     }
   }
 
+  Widget _memberFilter() {
+  if (members.isEmpty) return const SizedBox();
+
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+    child: Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: DropdownButtonFormField<int?>(
+        value: selectedMemberId,
+        isExpanded: true,
+        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+        decoration: const InputDecoration(
+          contentPadding:
+              EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          labelText: "Filter Member",
+          prefixIcon: Icon(Icons.directions_car),
+          border: OutlineInputBorder(
+            borderSide: BorderSide.none,
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+          ),
+        ),
+        items: [
+          const DropdownMenuItem<int?>(
+            value: null,
+            child: Row(
+              children: [
+                Icon(Icons.group, size: 18, color: Colors.grey),
+                SizedBox(width: 8),
+                Text(
+                  "Semua Member",
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          ...members.map((m) {
+            return DropdownMenuItem<int?>(
+  value: m["id"],
+  child: Row(
+    children: [
+      Icon(
+        Icons.person,
+        size: 18,
+        color: memberColor(m["id"]),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          "${m["member_code"]} • ${m["vehicle_type"]}",
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+    ],
+  ),
+);
+          }).toList(),
+        ],
+        onChanged: (val) {
+          setState(() => selectedMemberId = val);
+        },
+      ),
+    ),
+  );
+}
+
   // ----------------------------
   // BUILD
   // ----------------------------
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    body: Column(
-      children: [
-        _buildHeader(),
-        Expanded(
-          child: loading
-              ? const Center(child: CircularProgressIndicator())
-              : items.isEmpty
-                  ? _emptyState()
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: items.length,
-                      itemBuilder: (_, i) {
-                        return HistoryCard(
-                          data: items[i],
-                          formatDate: formatDate,
-                          formatTime: formatTime,
-                          statusColor: statusColor,
-                          onCancel: () =>
-                              cancelRequest(items[i]["id"]),
-                        );
-                      },
-                    ),
-        ),
-      ],
-    ),
-  );
-}
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          _buildHeader(),
+          _memberFilter(),
+          Expanded(
+            child: loading
+                ? const Center(child: CircularProgressIndicator())
+                : filteredItems.isEmpty
+                ? _emptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: filteredItems.length,
+                    itemBuilder: (_, i) {
+                      final item = filteredItems[i];
+                      final memberId = item["member"]?["id"] ?? 0;
+
+                      return HistoryCard(
+                        data: item,
+                        memberColor: memberColor(memberId),
+                        formatDate: formatDate,
+                        formatTime: formatTime,
+                        statusColor: statusColor,
+                        onCancel: () => cancelRequest(item["id"]),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
 
   // ----------------------------
   // HEADER WIDGET
   // ----------------------------
   Widget _buildHeader() {
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(20, 48, 20, 28),
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        colors: [Color(0xff004B92), Color(0xff0054A5)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      borderRadius: BorderRadius.only(
-        bottomLeft: Radius.circular(26),
-        bottomRight: Radius.circular(26),
-      ),
-    ),
-    child: Row(
-      children: [
-        InkWell(
-          onTap: () => Navigator.pop(context),
-          child: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 48, 20, 28),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xff004B92), Color(0xff0054A5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        const SizedBox(width: 14),
-        const Icon(Icons.history, color: Colors.white, size: 30),
-        const SizedBox(width: 10),
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Riwayat Home Service",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(26),
+          bottomRight: Radius.circular(26),
+        ),
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: () => Navigator.pop(context),
+            child: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+          ),
+          const SizedBox(width: 14),
+          const Icon(Icons.history, color: Colors.white, size: 30),
+          const SizedBox(width: 10),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Riwayat Home Service",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              "Semua permintaan Anda",
-              style: TextStyle(color: Colors.white70),
-            ),
-          ],
+              SizedBox(height: 4),
+              Text(
+                "Semua permintaan Anda",
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyState() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: const [
+        Icon(Icons.inbox_outlined, size: 80, color: Colors.grey),
+        SizedBox(height: 12),
+        Text(
+          "Belum ada riwayat Home Service",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        SizedBox(height: 6),
+        Text(
+          "Permintaan Home Service Anda akan muncul di sini",
+          style: TextStyle(color: Colors.grey),
         ),
       ],
-    ),
-  );
-}
-
-Widget _emptyState() {
-  return Column(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: const [
-      Icon(Icons.inbox_outlined, size: 80, color: Colors.grey),
-      SizedBox(height: 12),
-      Text(
-        "Belum ada riwayat Home Service",
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-      ),
-      SizedBox(height: 6),
-      Text(
-        "Permintaan Home Service Anda akan muncul di sini",
-        style: TextStyle(color: Colors.grey),
-      ),
-    ],
-  );
-}
+    );
+  }
 }
 
 // =======================================================================
@@ -247,10 +363,12 @@ class HistoryCard extends StatelessWidget {
   final String Function(String?) formatTime;
   final Color Function(String?) statusColor;
   final VoidCallback onCancel;
+  final Color memberColor;
 
   const HistoryCard({
     super.key,
     required this.data,
+    required this.memberColor,
     required this.formatDate,
     required this.formatTime,
     required this.statusColor,
@@ -279,7 +397,8 @@ class HistoryCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // TITLE + STATUS
+            if (data["member"] != null) _memberBadge(),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -354,6 +473,47 @@ class HistoryCard extends StatelessWidget {
           fontWeight: FontWeight.bold,
           fontSize: 12,
         ),
+      ),
+    );
+  }
+
+  Widget _memberBadge() {
+    final member = data["member"];
+    if (member == null) return const SizedBox();
+
+    final memberName = member["user"]?["name"] ?? "-";
+    final memberCode = member["member_code"] ?? "-";
+    final vehicleType = member["vehicle_type"] ?? "-";
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: memberColor.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Nama user
+          Text(
+            memberName,
+            style: TextStyle(
+              color: memberColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+
+          const SizedBox(height: 2),
+
+          // Identitas member
+          Text(
+            "$memberCode • $vehicleType",
+            style: TextStyle(color: memberColor, fontSize: 12),
+          ),
+        ],
       ),
     );
   }

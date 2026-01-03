@@ -38,8 +38,8 @@ class User extends Authenticatable
         return $this->role === 'user';
     }
 
-public function member()
-{
-    return $this->hasOne(Member::class);
-}
+    public function members()
+    {
+        return $this->hasMany(Member::class);
+    }
 }

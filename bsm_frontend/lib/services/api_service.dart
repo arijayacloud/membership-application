@@ -323,132 +323,138 @@ class ApiService {
 }
 
   static Future<Map<String, dynamic>> registerHomeService({
-    required String serviceType,
-    required String scheduleDate,
-    required String scheduleTime,
-    String? address,
-    String? city,
-    String? problemDescription,
-    Uint8List? photoBytes,
-    String? filename,
-    File? photoFile,
-  }) async {
-    try {
-      final token = await LocalStorage.getToken();
-      final uri = Uri.parse("${AppConfig.baseUrl}/api/home-service/request");
+  required int memberId,
+  required String serviceType,
+  required String scheduleDate,
+  required String scheduleTime,
+  String? address,
+  String? city,
+  String? problemDescription,
+  Uint8List? photoBytes,
+  String? filename,
+  File? photoFile,
+}) async {
+  try {
+    final token = await LocalStorage.getToken();
+    final uri = Uri.parse("${AppConfig.baseUrl}/api/home-service/request");
 
-      // =========================
-      // 🐞 DEBUG REQUEST
-      // =========================
-      debugPrint("⏩ POST $uri");
-      debugPrint("TOKEN: $token");
+    debugPrint("⏩ POST $uri");
+    debugPrint("MEMBER ID: $memberId");
 
-      final request = http.MultipartRequest("POST", uri);
+    final request = http.MultipartRequest("POST", uri);
 
-      request.headers.addAll({
-        "Accept": "application/json",
-        if (token != null) "Authorization": "Bearer $token",
-      });
+    request.headers.addAll({
+      "Accept": "application/json",
+      if (token != null) "Authorization": "Bearer $token",
+    });
 
-      // =========================
-      // ✅ VALIDASI FRONTEND
-      // =========================
-      if (serviceType.trim().isEmpty ||
-          scheduleDate.isEmpty ||
-          scheduleTime.isEmpty) {
-        return {"success": false, "message": "Data wajib tidak lengkap"};
-      }
-
-      // =========================
-      // 📦 FIELDS
-      // =========================
-      request.fields.addAll({
-        "service_type": serviceType.trim(),
-        "schedule_date": scheduleDate,
-        "schedule_time": scheduleTime,
-      });
-
-      if (address?.isNotEmpty == true) {
-        request.fields["address"] = address!.trim();
-      }
-
-      if (city?.isNotEmpty == true) {
-        request.fields["city"] = city!.trim();
-      }
-
-      if (problemDescription?.isNotEmpty == true) {
-        request.fields["problem_description"] = problemDescription!.trim();
-      }
-
-      // =========================
-      // 📸 FILE UPLOAD (FIXED)
-      // =========================
-      if (photoBytes != null && filename != null) {
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'problem_photo',
-            photoBytes,
-            filename: filename,
-            contentType: _getImageMediaType(filename), // 🔥 FIX
-          ),
-        );
-      } else if (photoFile != null) {
-        request.files.add(
-          await http.MultipartFile.fromPath('problem_photo', photoFile.path),
-        );
-      }
-
-      // =========================
-      // 🚀 SEND REQUEST
-      // =========================
-      final streamed = await request.send();
-      final res = await http.Response.fromStream(streamed);
-
-      // =========================
-      // 🐞 DEBUG RESPONSE
-      // =========================
-      debugPrint("STATUS CODE: ${res.statusCode}");
-      debugPrint("RESPONSE BODY: ${res.body}");
-
-      // =========================
-      // ✅ HANDLE RESPONSE
-      // =========================
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        return {
-          "success": true,
-          "data": res.body.isNotEmpty ? jsonDecode(res.body) : null,
-        };
-      }
-
-      if (res.statusCode == 422) {
-        final decoded = jsonDecode(res.body);
-        return {
-          "success": false,
-          "message": decoded["message"] ?? "Validasi gagal",
-          "errors": decoded["errors"],
-        };
-      }
-
-      if (res.statusCode == 401) {
-        return {"success": false, "message": "Unauthenticated"};
-      }
-
+    // =========================
+    // ✅ VALIDASI FRONTEND
+    // =========================
+    if (memberId <= 0 ||
+        serviceType.trim().isEmpty ||
+        scheduleDate.isEmpty ||
+        scheduleTime.isEmpty) {
       return {
         "success": false,
-        "message": "Server error ${res.statusCode}",
-        "response": res.body,
-      };
-    } catch (e, s) {
-      debugPrint("EXCEPTION: $e");
-      debugPrint("STACKTRACE: $s");
-
-      return {
-        "success": false,
-        "message": "Request failed",
-        "error": e.toString(),
+        "message": "Data wajib tidak lengkap",
       };
     }
+
+    // =========================
+    // 📦 FIELDS
+    // =========================
+    request.fields.addAll({
+      "member_id": memberId.toString(), // 🔥 PENTING
+      "service_type": serviceType.trim(),
+      "schedule_date": scheduleDate,
+      "schedule_time": scheduleTime,
+    });
+
+    if (address?.isNotEmpty == true) {
+      request.fields["address"] = address!.trim();
+    }
+
+    if (city?.isNotEmpty == true) {
+      request.fields["city"] = city!.trim();
+    }
+
+    if (problemDescription?.isNotEmpty == true) {
+      request.fields["problem_description"] =
+          problemDescription!.trim();
+    }
+
+    // =========================
+    // 📸 FILE UPLOAD
+    // =========================
+    if (photoBytes != null && filename != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'problem_photo',
+          photoBytes,
+          filename: filename,
+          contentType: _getImageMediaType(filename),
+        ),
+      );
+    } else if (photoFile != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'problem_photo',
+          photoFile.path,
+        ),
+      );
+    }
+
+    // =========================
+    // 🚀 SEND REQUEST
+    // =========================
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+
+    debugPrint("STATUS CODE: ${res.statusCode}");
+    debugPrint("RESPONSE BODY: ${res.body}");
+
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final decoded = jsonDecode(res.body);
+      return {
+        "success": decoded["success"] ?? true,
+        "message": decoded["message"],
+        "data": decoded["data"],
+      };
+    }
+
+    if (res.statusCode == 422) {
+      final decoded = jsonDecode(res.body);
+      return {
+        "success": false,
+        "message": decoded["message"] ?? "Validasi gagal",
+        "errors": decoded["errors"],
+      };
+    }
+
+    if (res.statusCode == 401) {
+      return {
+        "success": false,
+        "message": "Unauthenticated",
+      };
+    }
+
+    return {
+      "success": false,
+      "message": "Server error ${res.statusCode}",
+      "response": res.body,
+    };
+  } catch (e, s) {
+    debugPrint("EXCEPTION: $e");
+    debugPrint("STACKTRACE: $s");
+
+    return {
+      "success": false,
+      "message": "Request failed",
+      "error": e.toString(),
+    };
   }
+}
 
   static Future<Map<String, dynamic>> createPromo({
     required String title,

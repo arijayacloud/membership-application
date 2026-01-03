@@ -38,9 +38,9 @@ class Member extends Model
     // RELASI BARU
     // =====================
     public function user()
-{
-    return $this->belongsTo(User::class);
-}
+    {
+        return $this->belongsTo(User::class);
+    }
 
     // =====================
     // RELASI LAIN
@@ -69,8 +69,8 @@ class Member extends Model
 
         return $query->where(function ($q) use ($keyword) {
             $q->where('name', 'like', "%$keyword%")
-              ->orWhere('phone', 'like', "%$keyword%")
-              ->orWhere('member_code', 'like', "%$keyword%");
+                ->orWhere('phone', 'like', "%$keyword%")
+                ->orWhere('member_code', 'like', "%$keyword%");
         });
     }
 

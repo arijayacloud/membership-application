@@ -54,51 +54,37 @@ class MemberController extends Controller
         ]);
     }
 
-    public function myMember(Request $request)
-    {
-        $user = $request->user();
+    public function myMembers(Request $request)
+{
+    $user = $request->user();
 
-        $members = Member::with(['membershipType', 'user'])
-            ->where('user_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->get();
-
+    if (!$user) {
         return response()->json([
-            'status' => true,
-            'members' => $members->map(function ($member) {
-                return [
-                    'name' => $member->user->name,
-                    'member_code' => $member->member_code,
-
-                    // UNIT KENDARAAN
-                    'vehicle_type' => $member->vehicle_type,
-                    'vehicle_brand' => $member->vehicle_brand,
-                    'vehicle_model' => $member->vehicle_model,
-                    'vehicle_serial_number' => $member->vehicle_serial_number,
-
-                    // MEMBERSHIP
-                    'membership_type' => [
-                        'id' => $member->membershipType->id,
-                        'name' => $member->membershipType->name,
-                        'code' => $member->membershipType->code,
-                        'duration_months' => $member->membershipType->duration_months,
-                    ],
-
-                    'join_date' => Carbon::parse($member->join_date)
-                        ->locale('id')
-                        ->translatedFormat('d F Y'),
-
-                    'expired_at' => $member->expired_at
-                        ? Carbon::parse($member->expired_at)
-                        ->locale('id')
-                        ->translatedFormat('d F Y')
-                        : null,
-
-                    'status' => $member->status,
-                ];
-            }),
-        ]);
+            "success" => false,
+            "message" => "Unauthenticated"
+        ], 401);
     }
+
+    $members = Member::with('user:id,name')
+        ->where('user_id', $user->id)
+        ->select([
+            'id',
+            'user_id',
+            'vehicle_type',
+            'vehicle_brand',
+            'vehicle_model',
+            'vehicle_serial_number',
+            'address',
+            'city',
+        ])
+        ->latest()
+        ->get();
+
+    return response()->json([
+        "success" => true,
+        "data" => $members
+    ]);
+}
 
     public function registerMember(Request $request)
     {

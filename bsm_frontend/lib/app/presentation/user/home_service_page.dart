@@ -7,8 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../../services/api_service.dart';
 import 'home_service_history_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:universal_html/html.dart' as html;
 import "../widgets/show_snackbar.dart";
+import 'package:intl/intl.dart';
 
 class HomeServicePage extends StatefulWidget {
   const HomeServicePage({super.key});
@@ -40,6 +40,25 @@ class _HomeServicePageState extends State<HomeServicePage> {
 
   bool hasActiveService = false;
   Map<String, dynamic>? activeService;
+
+  List<Map<String, dynamic>> members = [];
+  Map<String, dynamic>? selectedMember;
+  int? selectedMemberId;
+
+  bool get isFormLocked {
+    if (selectedMemberId == null || activeService == null) return false;
+
+    if (isServiceFinished) return false;
+
+    return activeService!['member_id'] == selectedMemberId;
+  }
+
+  bool get isServiceFinished {
+    if (activeService == null) return true;
+
+    final status = activeService!["status"];
+    return status == "DONE" || status == "COMPLETED";
+  }
 
   Future pickDate() async {
     final selected = await showDatePicker(
@@ -116,169 +135,152 @@ class _HomeServicePageState extends State<HomeServicePage> {
   }
 
   Future<void> registerHomeService() async {
-  // =========================
-  // ✅ VALIDASI FORM WAJIB
-  // =========================
-  if (serviceTypeCtrl.text.isEmpty ||
-      scheduleDate == null ||
-      scheduleTime == null) {
-    ShowSnackBar.show(
-      context,
-      "Semua field wajib diisi!",
-      "warning",
-    );
-    return;
-  }
-
-  // =========================
-  // 🚫 CEK HOME SERVICE AKTIF
-  // =========================
-  if (hasActiveService) {
-    ShowSnackBar.show(
-      context,
-      "Anda masih memiliki Home Service yang sedang diproses",
-      "warning",
-    );
-    return;
-  }
-
-  setState(() => loading = true);
-
-  try {
-    final response = await ApiService.registerHomeService(
-      serviceType: serviceTypeCtrl.text.trim(),
-
-      scheduleDate:
-          "${scheduleDate!.year}-${scheduleDate!.month.toString().padLeft(2, '0')}-${scheduleDate!.day.toString().padLeft(2, '0')}",
-
-      scheduleTime: formatTimeOfDay(scheduleTime!), // ✅ TIDAK KOSONG
-
-      address: addressCtrl.text.isNotEmpty
-          ? addressCtrl.text.trim()
-          : memberData?["address"],
-
-      city: cityCtrl.text.isNotEmpty
-          ? cityCtrl.text.trim()
-          : memberData?["city"],
-
-      problemDescription: problemDescCtrl.text.isNotEmpty
-          ? problemDescCtrl.text.trim()
-          : null,
-
-      photoBytes: selectedImageBytes,
-      filename: selectedImageName,
-      photoFile: selectedImageFile,
-    );
-
-    setState(() => loading = false);
-
-    if (response["success"] == true) {
-      ShowSnackBar.show(
-        context,
-        "Berhasil membuat permintaan!",
-        "success",
-      );
-
-      // =========================
-      // 🔄 RESET FORM
-      // =========================
-      serviceTypeCtrl.clear();
-      addressCtrl.clear();
-      cityCtrl.clear();
-      problemDescCtrl.clear();
-
-      selectedImageFile = null;
-      selectedImageBytes = null;
-      selectedImageName = null;
-
-      setState(() {});
-    } else {
-      ShowSnackBar.show(
-        context,
-        response["message"] ?? "Gagal mengirim permintaan",
-        "error",
-      );
+    // =========================
+    // ✅ VALIDASI FORM WAJIB
+    // =========================
+    if (serviceTypeCtrl.text.isEmpty ||
+        scheduleDate == null ||
+        scheduleTime == null) {
+      ShowSnackBar.show(context, "Semua field wajib diisi!", "warning");
+      return;
     }
-  } catch (e) {
-    setState(() => loading = false);
-    ShowSnackBar.show(
-      context,
-      "Terjadi kesalahan: $e",
-      "error",
-    );
-  }
-}
 
-  Future checkActiveHomeService() async {
-    final res = await ApiService.get("home-services/active");
+    if (selectedMemberId == null) {
+      ShowSnackBar.show(
+        context,
+        "Silakan pilih member terlebih dahulu",
+        "warning",
+      );
+      return;
+    }
 
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
+    // =========================
+    // 🚫 CEK HOME SERVICE AKTIF
+    // =========================
+    if (activeService != null &&
+        !isServiceFinished &&
+        activeService!['member_id'] == selectedMemberId) {
+      ShowSnackBar.show(
+        context,
+        "Member ini masih memiliki Home Service yang belum selesai",
+        "warning",
+      );
+      return;
+    }
 
-      if (data["success"] == true && data["data"] != null) {
-        setState(() {
-          hasActiveService = true;
-          activeService = data["data"];
-        });
+    setState(() => loading = true);
+
+    try {
+      final response = await ApiService.registerHomeService(
+  memberId: selectedMemberId!,
+  serviceType: serviceTypeCtrl.text.trim(),
+  scheduleDate: DateFormat('yyyy-MM-dd').format(scheduleDate!), // ✅ FIX
+  scheduleTime: formatTimeOfDay(scheduleTime!),
+  address: addressCtrl.text,
+  city: cityCtrl.text,
+  problemDescription: problemDescCtrl.text.isNotEmpty
+      ? problemDescCtrl.text.trim()
+      : null,
+  photoBytes: selectedImageBytes,
+  filename: selectedImageName,
+  photoFile: selectedImageFile,
+);
+
+      setState(() => loading = false);
+
+      if (response["success"] == true) {
+        ShowSnackBar.show(context, "Berhasil membuat permintaan!", "success");
+
+        // =========================
+        // 🔄 RESET FORM
+        // =========================
+        serviceTypeCtrl.clear();
+        addressCtrl.clear();
+        cityCtrl.clear();
+        problemDescCtrl.clear();
+
+        selectedImageFile = null;
+        selectedImageBytes = null;
+        selectedImageName = null;
+
+        setState(() {});
+      } else {
+        ShowSnackBar.show(
+          context,
+          response["message"] ?? "Gagal mengirim permintaan",
+          "error",
+        );
       }
+    } catch (e) {
+      setState(() => loading = false);
+      ShowSnackBar.show(context, "Terjadi kesalahan: $e", "error");
     }
   }
 
-String formatTimeOfDay(TimeOfDay time) {
-  final h = time.hour.toString().padLeft(2, '0');
-  final m = time.minute.toString().padLeft(2, '0');
-  return "$h:$m";
-}
+  Future<void> fetchActiveService(int memberId) async {
+    try {
+      final response = await ApiService.get(
+        "home-services/active?member_id=$memberId",
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+
+        setState(() {
+          activeService = json["data"]; // null jika tidak ada
+        });
+      } else {
+        setState(() => activeService = null);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => activeService = null);
+    }
+  }
+
+  String formatTimeOfDay(TimeOfDay time) {
+    final h = time.hour.toString().padLeft(2, '0');
+    final m = time.minute.toString().padLeft(2, '0');
+    return "$h:$m";
+  }
 
   Map<String, dynamic>? memberData;
 
-  @override
   void initState() {
     super.initState();
-    fetchMemberData();
-    checkActiveHomeService();
+    fetchMembers();
   }
 
-  Future fetchMemberData() async {
-    final response = await ApiService.get("member/profile-member");
+  Future fetchMembers() async {
+    final response = await ApiService.get("members");
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
 
-      // JIKA BUKAN MEMBER
-      if (data["success"] == false || data["data"] == null) {
-        ShowSnackBar.show(
-          context,
-          "Anda belum menjadi member. Tidak bisa mengajukan Home Service.",
-          "error",
-        );
-
-        // Kembali ke halaman sebelumnya
-        Future.delayed(const Duration(seconds: 2), () {
-          Navigator.pop(context);
+      if (data["success"] == true && data["data"] != null) {
+        setState(() {
+          members = List<Map<String, dynamic>>.from(data["data"]);
         });
-        return;
+      } else {
+        _notMemberHandler();
       }
-
-      // JIKA MEMBER → lanjut isi data form
-      setState(() {
-        memberData = data["data"];
-        vehicleTypeCtrl.text = memberData?["vehicle_type"] ?? "";
-        vehicleBrandCtrl.text = memberData?["vehicle_brand"] ?? "";
-        vehicleModelCtrl.text = memberData?["vehicle_model"] ?? "";
-        vehicleSerialCtrl.text = memberData?["vehicle_serial_number"] ?? "";
-        addressCtrl.text = memberData?["address"] ?? "";
-        cityCtrl.text = memberData?["city"] ?? "";
-        problemDescCtrl.text = "";
-      });
     } else {
-      // Jika API error
-      ShowSnackBar.show(
-        context,
-        "Anda belum menjadi member. Tidak bisa mengajukan Home Service.",
-        "error",
-      );
+      _notMemberHandler();
     }
+  }
+
+  void _notMemberHandler() {
+    ShowSnackBar.show(
+      context,
+      "Anda belum menjadi member. Tidak bisa mengajukan Home Service.",
+      "error",
+    );
+
+    if (!mounted) return;
+
+    Navigator.pop(context);
   }
 
   @override
@@ -343,13 +345,12 @@ String formatTimeOfDay(TimeOfDay time) {
               child: Column(
                 children: [
                   // INFO ACTIVE SERVICE
-                  if (hasActiveService) _activeServiceInfo(),
+                  if (isFormLocked) _activeServiceInfo(),
 
-                  // FORM (LOCKED JIKA ADA ACTIVE SERVICE)
                   IgnorePointer(
-                    ignoring: hasActiveService,
+                    ignoring: isFormLocked,
                     child: Opacity(
-                      opacity: hasActiveService ? 0.5 : 1,
+                      opacity: isFormLocked ? 0.5 : 1,
                       child: Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
@@ -366,6 +367,54 @@ String formatTimeOfDay(TimeOfDay time) {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            inputLabel("Pilih Member"),
+                            DropdownButtonFormField<int>(
+                              value: selectedMemberId,
+                              items: members.map((m) {
+                                return DropdownMenuItem<int>(
+                                  value: m["id"],
+                                  child: Text(
+                                    "${m["user"]?["name"] ?? "-"} - ${m["vehicle_brand"] ?? ""} ${m["vehicle_model"] ?? ""}",
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (value) async {
+                                final member = members.firstWhere(
+                                  (m) => m["id"] == value,
+                                );
+
+                                setState(() {
+                                  selectedMemberId = value;
+                                  selectedMember = member;
+
+                                  // 🔥 RESET STATUS SEBELUM CEK
+                                  hasActiveService = false;
+                                  activeService = null;
+
+                                  vehicleTypeCtrl.text =
+                                      member["vehicle_type"] ?? "";
+                                  vehicleBrandCtrl.text =
+                                      member["vehicle_brand"] ?? "";
+                                  vehicleModelCtrl.text =
+                                      member["vehicle_model"] ?? "";
+                                  vehicleSerialCtrl.text =
+                                      member["vehicle_serial_number"] ?? "";
+                                  addressCtrl.text = member["address"] ?? "";
+                                  cityCtrl.text = member["city"] ?? "";
+                                });
+
+                                // 🔥 CEK ACTIVE SERVICE PER MEMBER
+                                await fetchActiveService(value!);
+                              },
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                hintText: "Pilih Member",
+                              ),
+                            ),
                             inputLabel("Jenis Layanan"),
                             inputField(
                               serviceTypeCtrl,
@@ -449,7 +498,7 @@ String formatTimeOfDay(TimeOfDay time) {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: ElevatedButton(
-                                    onPressed: loading || hasActiveService
+                                    onPressed: loading || isFormLocked
                                         ? null
                                         : registerHomeService,
                                     style: ElevatedButton.styleFrom(
