@@ -19,7 +19,7 @@ class CekMemberPage extends StatefulWidget {
 }
 
 class _CekMemberPageState extends State<CekMemberPage> {
-  final GlobalKey cardKey = GlobalKey();
+  late List<GlobalKey> cardKeys;
 
   List members = [];
   bool loading = true;
@@ -32,12 +32,13 @@ class _CekMemberPageState extends State<CekMemberPage> {
 
   Future<void> fetchMyMembers() async {
     try {
-      final res = await ApiService.get("member/me");
+      final res = await ApiService.get("members");
       final body = jsonDecode(res.body);
 
       if (res.statusCode == 200 && body['status'] == true) {
         setState(() {
           members = body['members'];
+          cardKeys = List.generate(members.length, (_) => GlobalKey());
           loading = false;
         });
       } else {
@@ -50,12 +51,13 @@ class _CekMemberPageState extends State<CekMemberPage> {
     }
   }
 
-  Future<void> downloadCard(Map memberData) async {
+  Future<void> downloadCard(int index, Map memberData) async {
     try {
       await Future.delayed(const Duration(milliseconds: 100));
 
       final boundary =
-          cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+          cardKeys[index].currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
 
       final image = await boundary.toImage(pixelRatio: 4);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -67,9 +69,7 @@ class _CekMemberPageState extends State<CekMemberPage> {
       final pngBytes = byteData.buffer.asUint8List();
       final fileName = "digital_member_${memberData['member_code']}.png";
 
-      // =========================
       // 🌐 WEB
-      // =========================
       if (kIsWeb) {
         final blob = html.Blob([pngBytes], 'image/png');
         final url = html.Url.createObjectUrlFromBlob(blob);
@@ -84,9 +84,7 @@ class _CekMemberPageState extends State<CekMemberPage> {
         return;
       }
 
-      // =========================
       // 📱 ANDROID / IOS
-      // =========================
       late Directory directory;
 
       if (Platform.isAndroid) {
@@ -118,7 +116,7 @@ class _CekMemberPageState extends State<CekMemberPage> {
   }
 
   void _showError(String msg) {
-    ShowSnackBar.show(context, "User belum mendaftar menjadi Member", "error");
+    ShowSnackBar.show(context, msg, "error");
   }
 
   @override
@@ -257,7 +255,7 @@ class _CekMemberPageState extends State<CekMemberPage> {
                           child: Column(
                             children: [
                               RepaintBoundary(
-                                key: index == 0 ? cardKey : null,
+                                key: cardKeys[index],
                                 child: DigitalMemberCard(
                                   name: member['name'],
                                   memberCode: member['member_code'],
@@ -271,7 +269,7 @@ class _CekMemberPageState extends State<CekMemberPage> {
                                 width: double.infinity,
                                 height: 46,
                                 child: ElevatedButton.icon(
-                                  onPressed: () => downloadCard(member),
+                                  onPressed: () => downloadCard(index, member),
                                   icon: const Icon(Icons.download_rounded),
                                   label: const Text(
                                     "Download Kartu Member",

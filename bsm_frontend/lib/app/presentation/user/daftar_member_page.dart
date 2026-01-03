@@ -10,6 +10,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'cek_member_page.dart';
 
 class DaftarMemberPage extends StatefulWidget {
   const DaftarMemberPage({super.key});
@@ -236,21 +237,19 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
   void _handleRegisterResponse(int statusCode, Map data) {
     if (statusCode >= 200 && statusCode < 300) {
       if (data["success"] == true) {
-        _showMsg("Pendaftaran berhasil. Foto menunggu verifikasi admin");
+        ShowSnackBar.show(
+          context,
+          "Pendaftaran berhasil. Foto menunggu verifikasi admin",
+          "success",
+        );
 
-        brandCtrl.clear();
-        modelCtrl.clear();
-        serialCtrl.clear();
-        addressCtrl.clear();
-        cityCtrl.clear();
-
-        setState(() {
-          selectedVehicleType = null;
-          selectedMembership = null;
-          selectedBenefits = null;
-          memberPhotoFile = null;
-          memberPhotoBytes = null;
-          memberPhotoFilename = null;
+        // ⏳ beri jeda sedikit agar snackbar terlihat
+        Future.delayed(const Duration(milliseconds: 800), () {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const CekMemberPage()),
+            (route) => false, // ❌ hapus semua halaman sebelumnya
+          );
         });
       } else {
         _showMsg(data["message"] ?? "Pendaftaran gagal", isError: true);

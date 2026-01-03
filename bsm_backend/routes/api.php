@@ -50,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // MEMBER
     Route::get('/members', [MemberController::class, 'myMembers']);
+    Route::get('/members/active', [MemberController::class, 'myActiveMembers']);
     Route::post('/member/register', [MemberController::class, 'registerMember']);
     // USER
     Route::put('/member/{memberId}/profile', [MemberController::class, 'updateProfile']);

@@ -172,19 +172,19 @@ class _HomeServicePageState extends State<HomeServicePage> {
 
     try {
       final response = await ApiService.registerHomeService(
-  memberId: selectedMemberId!,
-  serviceType: serviceTypeCtrl.text.trim(),
-  scheduleDate: DateFormat('yyyy-MM-dd').format(scheduleDate!), // ✅ FIX
-  scheduleTime: formatTimeOfDay(scheduleTime!),
-  address: addressCtrl.text,
-  city: cityCtrl.text,
-  problemDescription: problemDescCtrl.text.isNotEmpty
-      ? problemDescCtrl.text.trim()
-      : null,
-  photoBytes: selectedImageBytes,
-  filename: selectedImageName,
-  photoFile: selectedImageFile,
-);
+        memberId: selectedMemberId!,
+        serviceType: serviceTypeCtrl.text.trim(),
+        scheduleDate: DateFormat('yyyy-MM-dd').format(scheduleDate!), // ✅ FIX
+        scheduleTime: formatTimeOfDay(scheduleTime!),
+        address: addressCtrl.text,
+        city: cityCtrl.text,
+        problemDescription: problemDescCtrl.text.isNotEmpty
+            ? problemDescCtrl.text.trim()
+            : null,
+        photoBytes: selectedImageBytes,
+        filename: selectedImageName,
+        photoFile: selectedImageFile,
+      );
 
       setState(() => loading = false);
 
@@ -254,12 +254,14 @@ class _HomeServicePageState extends State<HomeServicePage> {
   }
 
   Future fetchMembers() async {
-    final response = await ApiService.get("members");
+    final response = await ApiService.get("members/active");
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
 
-      if (data["success"] == true && data["data"] != null) {
+      if (data["success"] == true &&
+          data["data"] != null &&
+          (data["data"] as List).isNotEmpty) {
         setState(() {
           members = List<Map<String, dynamic>>.from(data["data"]);
         });

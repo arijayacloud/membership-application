@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../services/api_service.dart';
 import '../../../storage/local_storage.dart';
+import '../../../utils/app_lifecycle_observer.dart';
+import '../../../utils/session_manager.dart';
 import '../widgets/dashboard_card.dart';
 import '../admin/member_admin_page.dart';
 import '../admin/home_service_admin_page.dart';
@@ -9,8 +11,40 @@ import '../admin/promo_admin_page.dart';
 import '../admin/info_admin_page.dart';
 import '../widgets/profile_admin_modal.dart';
 
-class DashboardAdminPage extends StatelessWidget {
+class DashboardAdminPage extends StatefulWidget {
   const DashboardAdminPage({super.key});
+
+  @override
+  State<DashboardAdminPage> createState() => _DashboardAdminPageState();
+}
+
+class _DashboardAdminPageState extends State<DashboardAdminPage>
+    with WidgetsBindingObserver {
+  late AppLifecycleObserver _observer;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _observer = AppLifecycleObserver(
+      onSessionExpired: () async {
+        await SessionManager.clear();
+        if (!mounted) return;
+
+        Navigator.pushNamedAndRemoveUntil(context, "/login", (route) => false);
+      },
+    );
+
+    WidgetsBinding.instance.addObserver(_observer);
+
+    SessionManager.updateLastActive();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(_observer);
+    super.dispose();
+  }
 
   Future<void> logout(BuildContext context) async {
     try {
@@ -78,142 +112,152 @@ class DashboardAdminPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false, // ⛔ cegah keluar otomatis
-      onPopInvoked: (didPop) {
-        if (didPop) return;
-        _confirmLogout(context); // tampilkan konfirmasi logout
-      },
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF6F9FC),
-        body: SafeArea(
-          child: Column(
-            children: [
-              // ================================
-              // 🌟 HEADER ADMIN
-              // ================================
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 26,
-                  horizontal: 20,
-                ),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF111827), Color(0xFF374151)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(28),
-                    bottomRight: Radius.circular(28),
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Admin Dashboard",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          "Kelola semua data bengkel di sini",
-                          style: TextStyle(color: Colors.white70, fontSize: 15),
-                        ),
-                      ],
-                    ),
+    return GestureDetector(
+      // ✅ setiap interaksi reset session timer
+      onTap: () => SessionManager.updateLastActive(),
+      onPanDown: (_) => SessionManager.updateLastActive(),
 
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Row(
+      child: PopScope(
+        canPop: false, // ⛔ cegah keluar otomatis
+        onPopInvoked: (didPop) {
+          if (didPop) return;
+          _confirmLogout(context);
+        },
+
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF6F9FC),
+          body: SafeArea(
+            child: Column(
+              children: [
+                // ================================
+                // 🌟 HEADER ADMIN
+                // ================================
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 26,
+                    horizontal: 20,
+                  ),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF111827), Color(0xFF374151)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(28),
+                      bottomRight: Radius.circular(28),
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _headerIcon(
-                            icon: LucideIcons.user,
-                            onTap: () => _showProfileModal(context),
+                          Text(
+                            "Admin Dashboard",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          const SizedBox(width: 10),
-                          _headerIcon(
-                            icon: LucideIcons.logOut,
-                            onTap: () => _confirmLogout(context),
+                          SizedBox(height: 6),
+                          Text(
+                            "Kelola semua data bengkel di sini",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 15,
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
 
-              const SizedBox(height: 20),
-
-              // ================================
-              // 🌟 MENU GRID
-              // ================================
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 0.92,
-                    children: [
-                      DashboardCard(
-                        title: "Kelola Member",
-                        icon: LucideIcons.userCog,
-                        color: const Color(0xFF0061A8),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MemberAdminPage(),
-                          ),
-                        ),
-                      ),
-                      DashboardCard(
-                        title: "Kelola Home Service",
-                        icon: LucideIcons.wrench,
-                        color: const Color(0xFF00ADB5),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const HomeServiceAdminPage(),
-                          ),
-                        ),
-                      ),
-                      DashboardCard(
-                        title: "Kelola Promo",
-                        icon: LucideIcons.sparkles,
-                        color: const Color(0xFFFF7F50),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const PromoAdminPage(),
-                          ),
-                        ),
-                      ),
-                      DashboardCard(
-                        title: "Kelola Info Bengkel",
-                        icon: LucideIcons.info,
-                        color: const Color(0xFF8E44AD),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const InfoAdminPage(),
-                          ),
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Row(
+                          children: [
+                            _headerIcon(
+                              icon: LucideIcons.user,
+                              onTap: () => _showProfileModal(context),
+                            ),
+                            const SizedBox(width: 10),
+                            _headerIcon(
+                              icon: LucideIcons.logOut,
+                              onTap: () => _confirmLogout(context),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 20),
+
+                // ================================
+                // 🌟 MENU GRID
+                // ================================
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: GridView.count(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      childAspectRatio: 0.92,
+                      children: [
+                        DashboardCard(
+                          title: "Kelola Member",
+                          icon: LucideIcons.userCog,
+                          color: const Color(0xFF0061A8),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MemberAdminPage(),
+                            ),
+                          ),
+                        ),
+                        DashboardCard(
+                          title: "Kelola Home Service",
+                          icon: LucideIcons.wrench,
+                          color: const Color(0xFF00ADB5),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const HomeServiceAdminPage(),
+                            ),
+                          ),
+                        ),
+                        DashboardCard(
+                          title: "Kelola Promo",
+                          icon: LucideIcons.sparkles,
+                          color: const Color(0xFFFF7F50),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PromoAdminPage(),
+                            ),
+                          ),
+                        ),
+                        DashboardCard(
+                          title: "Kelola Info Bengkel",
+                          icon: LucideIcons.info,
+                          color: const Color(0xFF8E44AD),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const InfoAdminPage(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

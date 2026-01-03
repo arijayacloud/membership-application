@@ -11,6 +11,9 @@ class Member extends Model
     use HasFactory;
 
     protected $table = 'members';
+    protected $casts = [
+        'expired_at' => 'date', // ✅ WAJIB
+    ];
 
     protected $fillable = [
         'user_id',

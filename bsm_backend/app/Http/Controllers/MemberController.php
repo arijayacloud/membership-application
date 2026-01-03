@@ -55,35 +55,62 @@ class MemberController extends Controller
     }
 
     public function myMembers(Request $request)
+    {
+        $user = $request->user();
+
+        $members = Member::with([
+            'user:id,name',
+            'membershipType:id,name'
+        ])
+            ->where('user_id', $user->id)
+            ->get()
+            ->map(function ($m) {
+                return [
+                    'name' => $m->user->name ?? '-',
+                    'member_code' => $m->member_code ?? '-',
+                    'membership_type' => [
+                        'name' => $m->membershipType->name ?? '-',
+                    ],
+                    'expired_at' => $m->expired_at
+                        ? $m->expired_at->format('d M Y')
+                        : '-',
+                ];
+            });
+
+        return response()->json([
+            'status' => true,
+            'members' => $members,
+        ]);
+    }
+
+    public function myActiveMembers(Request $request)
 {
     $user = $request->user();
 
-    if (!$user) {
-        return response()->json([
-            "success" => false,
-            "message" => "Unauthenticated"
-        ], 401);
-    }
-
-    $members = Member::with('user:id,name')
+    $members = Member::with(['user:id,name'])
         ->where('user_id', $user->id)
-        ->select([
-            'id',
-            'user_id',
-            'vehicle_type',
-            'vehicle_brand',
-            'vehicle_model',
-            'vehicle_serial_number',
-            'address',
-            'city',
-        ])
-        ->latest()
-        ->get();
+        ->where('status', 'active')
+        ->get()
+        ->map(function ($m) {
+            return [
+                'id' => $m->id,
+                'user' => [
+                    'name' => $m->user->name ?? '-',
+                ],
+                'vehicle_type' => $m->vehicle_type,
+                'vehicle_brand' => $m->vehicle_brand,
+                'vehicle_model' => $m->vehicle_model,
+                'vehicle_serial_number' => $m->vehicle_serial_number,
+                'address' => $m->address,
+                'city' => $m->city,
+                'expired_at' => optional($m->expired_at)->format('Y-m-d'),
+            ];
+        });
 
     return response()->json([
-        "success" => true,
-        "data" => $members
-    ]);
+    'success' => true,
+    'data' => $members, // ⬅️ GANTI DARI 'members'
+]);
 }
 
     public function registerMember(Request $request)
