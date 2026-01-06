@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import '../../../services/api_service.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:bsm_frontend/services/whatsapp_service.dart';
 
 class InfoPage extends StatefulWidget {
   const InfoPage({super.key});
@@ -30,21 +31,6 @@ class _InfoPageState extends State<InfoPage> {
 
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  Future<void> _openWhatsApp(String phone) async {
-    // pastikan format nomor: 628xxx (tanpa +, tanpa 0)
-    final formatted = phone.startsWith('0')
-        ? '62${phone.substring(1)}'
-        : phone.replaceAll('+', '');
-
-    final uri = Uri.parse("https://wa.me/$formatted");
-
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      throw "Tidak dapat membuka WhatsApp";
     }
   }
 
@@ -164,7 +150,11 @@ class _InfoPageState extends State<InfoPage> {
                               Icons.call,
                               "WhatsApp",
                               info['phone'],
-                              onTap: () => _openWhatsApp(info['phone']),
+                              onTap: () => WhatsAppService.openChat(
+                                '6285635661415',
+                                message:
+                                    'Halo, saya tertarik dengan layanan Anda',
+                              ),
                             ),
                           ],
                         ),

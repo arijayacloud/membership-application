@@ -94,14 +94,30 @@ class _PromoAdminPageState extends State<PromoAdminPage> {
     );
 
     if (picked != null) {
-      controller.text = picked.toIso8601String().split("T").first;
+      // ✅ FORMAT LOKAL (AMAN)
+      controller.text = DateFormat('yyyy-MM-dd').format(picked);
     }
   }
 
   String formatDate(String? date) {
     if (date == null || date.isEmpty) return "-";
-    final dt = DateTime.parse(date);
-    return DateFormat('dd-MM-yyyy').format(dt);
+
+    try {
+      // Ambil tanggal saja (AMAN untuk DATE & DATETIME)
+      final datePart = date.split('T')[0];
+
+      final parts = datePart.split('-');
+      final dt = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+
+      return DateFormat('dd-MM-yyyy').format(dt);
+    } catch (e) {
+      debugPrint("FORMAT DATE ERROR: $date | $e");
+      return "-";
+    }
   }
 
   // ====================================================
@@ -597,7 +613,7 @@ class _PromoAdminPageState extends State<PromoAdminPage> {
   // ====================================================
   Future<void> toggleStatus(int id, bool newValue) async {
     final res = await ApiService.put("admin/promo/status/$id", {
-      "is_active": newValue ? "1" : "0",
+      "is_active": newValue,
     });
 
     if (res.statusCode == 200) {
@@ -609,6 +625,27 @@ class _PromoAdminPageState extends State<PromoAdminPage> {
         newValue ? "Promo diaktifkan" : "Promo dinonaktifkan",
         newValue ? "success" : "warning",
       );
+    }
+  }
+
+  bool isExpired(String? endDate) {
+    if (endDate == null || endDate.isEmpty) return true;
+
+    try {
+      final datePart = endDate.split('T')[0];
+      final parts = datePart.split('-');
+
+      final end = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+
+      final today = DateTime.now();
+
+      return today.isAfter(end);
+    } catch (_) {
+      return true;
     }
   }
 
@@ -761,7 +798,8 @@ class _PromoAdminPageState extends State<PromoAdminPage> {
                   children: [
                     Image.network(
                       "${AppConfig.baseUrl}/media/${promo['banner']}",
-                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.broken_image),
                       height: 180,
                       width: double.infinity,
                       fit: BoxFit.cover,
@@ -771,7 +809,7 @@ class _PromoAdminPageState extends State<PromoAdminPage> {
                     Positioned(
                       top: 12,
                       left: 12,
-                      child: _statusBadge(promo['is_active']),
+                      child: _statusBadge(promo['is_active'] ?? false),
                     ),
                   ],
                 ),
@@ -808,8 +846,22 @@ class _PromoAdminPageState extends State<PromoAdminPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Switch.adaptive(
-                      value: promo['is_active'] == 1,
-                      onChanged: (val) => toggleStatus(promo['id'], val),
+                      value: promo['is_active'] == true,
+                      onChanged: (val) {
+                        if (val == true && isExpired(promo['end_date'])) {
+                          final expiredDate = formatDate(promo['end_date']);
+
+                          ShowSnackBar.show(
+                            context,
+                            "Promo telah kadaluwarsa pada $expiredDate.\nSilakan ubah tanggal terlebih dahulu.",
+                            "warning",
+                          );
+
+                          return; // ⛔ STOP
+                        }
+
+                        toggleStatus(promo['id'], val);
+                      },
                     ),
 
                     Row(
@@ -836,15 +888,15 @@ class _PromoAdminPageState extends State<PromoAdminPage> {
     );
   }
 
-  Widget _statusBadge(int status) {
+  Widget _statusBadge(bool status) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: status == 1 ? Colors.green : Colors.grey,
+        color: status ? Colors.green : Colors.grey,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        status == 1 ? "AKTIF" : "NONAKTIF",
+        status ? "AKTIF" : "NONAKTIF",
         style: const TextStyle(
           color: Colors.white,
           fontSize: 11,

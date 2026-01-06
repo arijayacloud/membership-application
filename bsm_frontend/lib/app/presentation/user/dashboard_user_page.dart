@@ -303,8 +303,10 @@ class _DashboardUserPageState extends State<DashboardUserPage>
                           title: "WhatsApp",
                           icon: LucideIcons.messageCircle,
                           color: const Color(0xFF25D366),
-                          onTap: () =>
-                              WhatsAppService.openChat("6285635661415"),
+                          onTap: () => WhatsAppService.openChat(
+                            '6285635661415',
+                            message: 'Halo, saya tertarik dengan layanan Anda',
+                          ),
                         ),
                       ],
                     ),

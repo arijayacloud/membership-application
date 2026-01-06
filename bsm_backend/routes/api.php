@@ -102,6 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/promo', [PromoController::class, 'store']);
         Route::put('/admin/promo/{id}', [PromoController::class, 'update']);
         Route::delete('/admin/promo/{id}', [PromoController::class, 'destroy']);
+        Route::put('admin/promo/status/{id}', [PromoController::class, 'updateStatus']);
 
         // HOME SERVICE - ADMIN UPDATE STATUS
         Route::get('/admin/home-services', [HomeServiceController::class, 'index']);

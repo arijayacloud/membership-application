@@ -13,7 +13,10 @@ class PromoController extends Controller
     // ============================
     public function index(Request $request)
     {
-        Promo::where('is_active', 1)->expired()->update(['is_active' => 0]);
+        Promo::where('is_active', 1)
+    ->whereNotNull('end_date')
+    ->where('end_date', '<', today())
+    ->update(['is_active' => 0]);
 
         $status = $request->query('status');
         $query = Promo::query();
@@ -23,21 +26,21 @@ class PromoController extends Controller
             $query->where('is_active', 1)
                 ->where(function ($q) {
                     $q->whereNull('end_date')
-                        ->orWhere('end_date', '>=', now());
+                        ->orWhere('end_date', '>=', today());
                 });
         }
 
         // Filter admin
         if ($status === "expired") {
             $query->whereNotNull('end_date')
-                ->where('end_date', '<', now());
+                ->where('end_date', '<', today());
         } elseif ($status === "upcoming") {
-            $query->where('start_date', '>', now());
+            $query->where('start_date', '>', today());
         } elseif ($status === "active") {
             $query->where('is_active', 1)
                 ->where(function ($q) {
                     $q->whereNull('end_date')
-                        ->orWhere('end_date', '>=', now());
+                        ->orWhere('end_date', '>=', today());
                 });
         }
 
@@ -69,7 +72,7 @@ class PromoController extends Controller
         if ((!$request->user() || $request->user()->role == "user")) {
             if (
                 !$promo->is_active ||
-                ($promo->end_date && $promo->end_date < now())
+                ($promo->end_date && $promo->end_date < today())
             ) {
                 return response()->json([
                     'message' => 'Promo tidak tersedia'
@@ -166,6 +169,25 @@ class PromoController extends Controller
 
         return response()->json([
             'message' => 'Promo deleted successfully'
+        ]);
+    }
+
+    // ============================
+    // 📌 UPDATE STATUS PROMO (ADMIN ONLY)
+    // ============================
+    public function updateStatus(Request $request, $id)
+    {
+        $request->validate([
+            'is_active' => 'required|boolean',
+        ]);
+
+        $promo = Promo::findOrFail($id);
+        $promo->is_active = $request->is_active;
+        $promo->save();
+
+        return response()->json([
+            'message' => 'Status promo updated',
+            'data' => $promo
         ]);
     }
 }
