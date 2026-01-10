@@ -14,9 +14,9 @@ class PromoController extends Controller
     public function index(Request $request)
     {
         Promo::where('is_active', 1)
-    ->whereNotNull('end_date')
-    ->where('end_date', '<', today())
-    ->update(['is_active' => 0]);
+            ->whereNotNull('end_date')
+            ->where('end_date', '<', today())
+            ->update(['is_active' => 0]);
 
         $status = $request->query('status');
         $query = Promo::query();

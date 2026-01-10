@@ -13,6 +13,7 @@ class Member extends Model
     protected $table = 'members';
     protected $casts = [
         'expired_at' => 'date', // ✅ WAJIB
+        'duration_months' => 'integer',
     ];
 
     protected $fillable = [

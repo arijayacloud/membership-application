@@ -283,7 +283,8 @@ class _MemberAdminPageState extends State<MemberAdminPage> {
     final cityC = TextEditingController(text: member["city"] ?? "");
 
     String status = member["status"] ?? "active";
-    int? membershipTypeId = member["membership_type_id"];
+    int? membershipTypeId =
+    int.tryParse(member["membership_type_id"]?.toString() ?? "");
     bool saving = false;
 
     showModalBottomSheet(
@@ -432,29 +433,25 @@ class _MemberAdminPageState extends State<MemberAdminPage> {
                         loadingTypes
                             ? const Center(child: CircularProgressIndicator())
                             : DropdownButtonFormField<int>(
-                                value:
-                                    membershipTypes.any(
-                                      (e) => e["id"] == membershipTypeId,
-                                    )
-                                    ? membershipTypeId
-                                    : null,
-                                items: membershipTypes
-                                    .map<DropdownMenuItem<int>>(
-                                      (e) => DropdownMenuItem<int>(
-                                        value: e["id"] as int,
-                                        child: Text(
-                                          e["display_name"].toString(),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (v) =>
-                                    setModalState(() => membershipTypeId = v),
-                                decoration: _inputDecoration(
-                                  "Upgrade Membership",
-                                  Icons.upgrade,
-                                ),
-                              ),
+  value: membershipTypes.any(
+    (e) =>
+        int.tryParse(e["id"].toString()) == membershipTypeId,
+  )
+      ? membershipTypeId
+      : null,
+  items: membershipTypes.map<DropdownMenuItem<int>>((e) {
+    final id = int.tryParse(e["id"].toString());
+    return DropdownMenuItem<int>(
+      value: id,
+      child: Text(e["display_name"].toString()),
+    );
+  }).toList(),
+  onChanged: (v) => setModalState(() => membershipTypeId = v),
+  decoration: _inputDecoration(
+    "Upgrade Membership",
+    Icons.upgrade,
+  ),
+),
 
                         const SizedBox(height: 12),
 

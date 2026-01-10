@@ -172,6 +172,58 @@ class _HomeServiceAdminPageState extends State<HomeServiceAdminPage> {
     }
   }
 
+  Future<void> pickCompletionPhoto(StateSetter modalSetState) async {
+    final picker = ImagePicker();
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text("Ambil dari Kamera"),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text("Pilih dari Galeri"),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    final picked = await picker.pickImage(source: source, imageQuality: 75);
+
+    if (picked == null) return;
+
+    if (kIsWeb) {
+      final bytes = await picked.readAsBytes();
+      modalSetState(() {
+        completionPhotoBytes = bytes;
+        completionPhoto = null;
+        uploadedCompletionPhotoUrl = null;
+      });
+    } else {
+      modalSetState(() {
+        completionPhoto = File(picked.path);
+        completionPhotoBytes = null;
+        uploadedCompletionPhotoUrl = null;
+      });
+    }
+  }
+
   Future<void> confirmUpdateStatus(int id, String status) async {
     final color = statusDialogColor(status);
     final icon = statusDialogIcon(status);
@@ -554,29 +606,8 @@ class _HomeServiceAdminPageState extends State<HomeServiceAdminPage> {
                             const SizedBox(height: 14),
 
                             // 📸 PICK FOTO
-                            completionPhotoPicker(() async {
-                              final picker = ImagePicker();
-                              final picked = await picker.pickImage(
-                                source: ImageSource.camera,
-                                imageQuality: 75,
-                              );
-
-                              if (picked == null) return;
-
-                              if (kIsWeb) {
-                                final bytes = await picked.readAsBytes();
-                                modalSetState(() {
-                                  completionPhotoBytes = bytes;
-                                  completionPhoto = null;
-                                  uploadedCompletionPhotoUrl = null;
-                                });
-                              } else {
-                                modalSetState(() {
-                                  completionPhoto = File(picked.path);
-                                  completionPhotoBytes = null;
-                                  uploadedCompletionPhotoUrl = null;
-                                });
-                              }
+                            completionPhotoPicker(() {
+                              pickCompletionPhoto(modalSetState);
                             }),
                           ]),
 

@@ -84,34 +84,34 @@ class MemberController extends Controller
     }
 
     public function myActiveMembers(Request $request)
-{
-    $user = $request->user();
+    {
+        $user = $request->user();
 
-    $members = Member::with(['user:id,name'])
-        ->where('user_id', $user->id)
-        ->where('status', 'active')
-        ->get()
-        ->map(function ($m) {
-            return [
-                'id' => $m->id,
-                'user' => [
-                    'name' => $m->user->name ?? '-',
-                ],
-                'vehicle_type' => $m->vehicle_type,
-                'vehicle_brand' => $m->vehicle_brand,
-                'vehicle_model' => $m->vehicle_model,
-                'vehicle_serial_number' => $m->vehicle_serial_number,
-                'address' => $m->address,
-                'city' => $m->city,
-                'expired_at' => optional($m->expired_at)->format('Y-m-d'),
-            ];
-        });
+        $members = Member::with(['user:id,name'])
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->get()
+            ->map(function ($m) {
+                return [
+                    'id' => $m->id,
+                    'user' => [
+                        'name' => $m->user->name ?? '-',
+                    ],
+                    'vehicle_type' => $m->vehicle_type,
+                    'vehicle_brand' => $m->vehicle_brand,
+                    'vehicle_model' => $m->vehicle_model,
+                    'vehicle_serial_number' => $m->vehicle_serial_number,
+                    'address' => $m->address,
+                    'city' => $m->city,
+                    'expired_at' => optional($m->expired_at)->format('Y-m-d'),
+                ];
+            });
 
-    return response()->json([
-    'success' => true,
-    'data' => $members, // ⬅️ GANTI DARI 'members'
-]);
-}
+        return response()->json([
+            'success' => true,
+            'data' => $members, // ⬅️ GANTI DARI 'members'
+        ]);
+    }
 
     public function registerMember(Request $request)
     {
@@ -445,12 +445,17 @@ class MemberController extends Controller
         // ======================
         // UPDATE MEMBERSHIP TYPE
         // ======================
-        if ($request->filled('membership_type_id')) {
+        if (
+            $request->filled('membership_type_id') &&
+            (int)$request->membership_type_id !== (int)$member->membership_type_id
+        ) {
             $type = MembershipType::findOrFail($request->membership_type_id);
-            $member->membership_type_id = $type->id;
-            $member->expired_at = now()->addMonths($type->duration_months);
-        }
 
+            $duration = (int) $type->duration_months;
+
+            $member->membership_type_id = $type->id;
+            $member->expired_at = now()->addMonths($duration);
+        }
         // ======================
         // 📸 UPLOAD FOTO MEMBER
         // ======================

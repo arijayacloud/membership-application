@@ -1,6 +1,6 @@
 class AppConfig {
   // 🟦 URL utama Laravel
-  static const String baseUrl = "http://127.0.0.1:8000";
+  static const String baseUrl = "https://bsmservicecenter.my.id";
 
   // 🟦 Endpoint API
   static const String baseUrlApi = "$baseUrl/api";
