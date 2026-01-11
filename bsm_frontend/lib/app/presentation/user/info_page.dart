@@ -34,6 +34,24 @@ class _InfoPageState extends State<InfoPage> {
     }
   }
 
+  String normalizeWhatsapp(String phone) {
+    // Hapus spasi, tanda +, strip, dll
+    String clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Jika mulai 0 → ganti 62
+    if (clean.startsWith('0')) {
+      clean = '62${clean.substring(1)}';
+    }
+
+    // Jika sudah 62 → biarkan
+    if (clean.startsWith('62')) {
+      return clean;
+    }
+
+    // Fallback (kalau format aneh)
+    return clean;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -150,11 +168,19 @@ class _InfoPageState extends State<InfoPage> {
                               Icons.call,
                               "WhatsApp",
                               info['phone'],
-                              onTap: () => WhatsAppService.openChat(
-                                '6285635661415',
-                                message:
-                                    'Halo, saya tertarik dengan layanan Anda',
-                              ),
+                              onTap: () {
+                                final phone = info['phone'];
+
+                                if (phone == null || phone.isEmpty) return;
+
+                                final waNumber = normalizeWhatsapp(phone);
+
+                                WhatsAppService.openChat(
+                                  waNumber,
+                                  message:
+                                      'Halo, saya tertarik dengan layanan Anda',
+                                );
+                              },
                             ),
                           ],
                         ),

@@ -46,19 +46,15 @@ class _HomeServicePageState extends State<HomeServicePage> {
   int? selectedMemberId;
 
   bool get isFormLocked {
-    if (selectedMemberId == null || activeService == null) return false;
-
-    if (isServiceFinished) return false;
-
-    return activeService!['member_id'] == selectedMemberId;
-  }
+  return hasActiveService && !isServiceFinished;
+}
 
   bool get isServiceFinished {
-    if (activeService == null) return true;
+  if (activeService == null) return true;
 
-    final status = activeService!["status"];
-    return status == "DONE" || status == "COMPLETED";
-  }
+  final status = activeService!["status"];
+  return status == "done" || status == "completed";
+}
 
   Future pickDate() async {
     final selected = await showDatePicker(
@@ -218,27 +214,34 @@ class _HomeServicePageState extends State<HomeServicePage> {
   }
 
   Future<void> fetchActiveService(int memberId) async {
-    try {
-      final response = await ApiService.get(
-        "home-services/active?member_id=$memberId",
-      );
+  try {
+    final response = await ApiService.get(
+      "home-services/active?member_id=$memberId",
+    );
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
 
-        setState(() {
-          activeService = json["data"]; // null jika tidak ada
-        });
-      } else {
-        setState(() => activeService = null);
-      }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => activeService = null);
+      setState(() {
+        hasActiveService = json["has_active"] == true;
+        activeService = hasActiveService ? json["data"] : null;
+      });
+    } else {
+      setState(() {
+        hasActiveService = false;
+        activeService = null;
+      });
     }
+  } catch (_) {
+    if (!mounted) return;
+    setState(() {
+      hasActiveService = false;
+      activeService = null;
+    });
   }
+}
 
   String formatTimeOfDay(TimeOfDay time) {
     final h = time.hour.toString().padLeft(2, '0');
@@ -254,24 +257,45 @@ class _HomeServicePageState extends State<HomeServicePage> {
   }
 
   Future fetchMembers() async {
-    final response = await ApiService.get("members/active");
+  final response = await ApiService.get("members/active");
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
 
-      if (data["success"] == true &&
-          data["data"] != null &&
-          (data["data"] as List).isNotEmpty) {
+    if (data["success"] == true &&
+        data["data"] != null &&
+        (data["data"] as List).isNotEmpty) {
+      setState(() {
+        members = List<Map<String, dynamic>>.from(data["data"]);
+      });
+
+      // 🔥 FIX PENTING: JIKA HANYA 1 MEMBER
+      if (members.length == 1) {
+        final member = members.first;
+
         setState(() {
-          members = List<Map<String, dynamic>>.from(data["data"]);
+          selectedMemberId = member["id"];
+          selectedMember = member;
+
+          vehicleTypeCtrl.text = member["vehicle_type"] ?? "";
+          vehicleBrandCtrl.text = member["vehicle_brand"] ?? "";
+          vehicleModelCtrl.text = member["vehicle_model"] ?? "";
+          vehicleSerialCtrl.text =
+              member["vehicle_serial_number"] ?? "";
+          addressCtrl.text = member["address"] ?? "";
+          cityCtrl.text = member["city"] ?? "";
         });
-      } else {
-        _notMemberHandler();
+
+        // 🔥 PANGGIL CEK ACTIVE SERVICE
+        await fetchActiveService(member["id"]);
       }
     } else {
       _notMemberHandler();
     }
+  } else {
+    _notMemberHandler();
   }
+}
 
   void _notMemberHandler() {
     ShowSnackBar.show(

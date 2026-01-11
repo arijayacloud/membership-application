@@ -353,14 +353,21 @@ class HomeServiceController extends Controller
             ], 401);
         }
 
-        $activeService = HomeService::where('user_id', $user->id)
+        $memberId = $request->query('member_id');
+
+        $query = HomeService::where('user_id', $user->id)
             ->whereIn('status', [
                 'pending',
                 'approved',
                 'on_process'
-            ])
-            ->latest()
-            ->first();
+            ]);
+
+        // 🔥 FILTER MEMBER JIKA DIKIRIM DARI FLUTTER
+        if ($memberId) {
+            $query->where('member_id', $memberId);
+        }
+
+        $activeService = $query->latest()->first();
 
         if ($activeService) {
             return response()->json([

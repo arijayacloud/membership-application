@@ -169,6 +169,7 @@ class MemberController extends Controller
         $number = str_pad($count, 3, '0', STR_PAD_LEFT);
         $memberCode = "MBR-" . $number . "-" . strtoupper($type->code);
 
+        $duration = (int) $type->duration_months;
         // =========================
         // 7️⃣ SIMPAN DATA MEMBER
         // =========================
@@ -178,7 +179,9 @@ class MemberController extends Controller
             'membership_type_id'    => $type->id,
 
             'join_date'             => now(),
-            'expired_at'            => Carbon::now()->addMonths($type->duration_months),
+
+            'expired_at' => Carbon::now()->addMonths($duration),
+
 
             // kendaraan
             'vehicle_type'          => $request->vehicle_type,
@@ -221,97 +224,67 @@ class MemberController extends Controller
         ]);
     }
 
-    public function updateProfile(Request $request)
+    public function updateProfile(Request $request, Member $member)
     {
-        $user = Auth::user();
-        $member = $user->member;
+        $authUser = Auth::user();
 
-        if (!$member) {
+        // 🔐 CEK KEPEMILIKAN
+        if ($member->user_id !== $authUser->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Member not found'
-            ], 404);
+                'message' => 'Unauthorized member'
+            ], 403);
         }
 
-        // VALIDASI
-        // ======================
-        // 🔴 VALIDASI (DEBUG MODE)
-        // ======================
-        try {
-            $validated = $request->validate([
-                'name'   => 'required|string|max:255',
-                'phone'  => 'required|string|unique:users,phone,' . $user->id,
-                'email'  => 'nullable|email|unique:users,email,' . $user->id,
+        $validated = $request->validate([
+            'name'   => 'required|string|max:255',
+            'phone'  => 'required|string|unique:users,phone,' . $authUser->id,
+            'email'  => 'nullable|email|unique:users,email,' . $authUser->id,
 
-                'address' => 'nullable|string',
-                'city'    => 'nullable|string',
-                'vehicle_type'  => 'nullable|string',
-                'vehicle_brand' => 'nullable|string',
-                'vehicle_model' => 'nullable|string',
-                'vehicle_serial_number' => 'nullable|string',
-            ]);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors'  => $e->errors(),
-                'payload' => $request->all(),
-            ], 422);
-        }
-        // ======================
-        // 🔵 UPDATE USER
-        // ======================
-        DB::table('users')
-            ->where('id', $user->id)
-            ->update([
-                'name'  => $validated['name'],
-                'phone' => $validated['phone'],
-                'email' => $validated['email'] ?? $user->email,
-                'updated_at' => now(),
-            ]);
+            'address' => 'nullable|string',
+            'city'    => 'nullable|string',
+            'vehicle_type' => 'nullable|string',
+            'vehicle_brand' => 'nullable|string',
+            'vehicle_model' => 'nullable|string',
+            'vehicle_serial_number' => 'nullable|string',
+        ]);
 
-        $memberPhotoPath = $member->member_photo;
+        // ✅ AMBIL USER ELOQUENT ASLI
+        $user = User::findOrFail($authUser->id);
 
+        // ✅ SEKARANG PASTI AMAN
+        $user->update([
+            'name'  => $validated['name'],
+            'phone' => $validated['phone'],
+            'email' => $validated['email'] ?? $user->email,
+        ]);
+
+        // 📸 FOTO MEMBER
         if ($request->hasFile('member_photo')) {
-
-            // hapus foto lama jika ada
-            if ($member->member_photo && Storage::disk('public')->exists($member->member_photo)) {
+            if ($member->member_photo) {
                 Storage::disk('public')->delete($member->member_photo);
             }
 
-            // simpan foto baru
-            $memberPhotoPath = $request->file('member_photo')
+            $member->member_photo = $request
+                ->file('member_photo')
                 ->store('member_photos', 'public');
         }
 
-        // ======================
-        // 🔵 UPDATE MEMBER
-        // ======================
-        DB::table('members')
-            ->where('id', $member->id)
-            ->update([
-                'address' => $validated['address'] ?? $member->address,
-                'city'    => $validated['city'] ?? $member->city,
-                'vehicle_type'  => $validated['vehicle_type'] ?? $member->vehicle_type,
-                'vehicle_brand' => $validated['vehicle_brand'] ?? $member->vehicle_brand,
-                'vehicle_model' => $validated['vehicle_model'] ?? $member->vehicle_model,
-                'vehicle_serial_number' => $validated['vehicle_serial_number'] ?? $member->vehicle_serial_number,
-
-                // 🔵 FOTO
-                'member_photo' => $memberPhotoPath,
-
-                'updated_at' => now(),
-            ]);
-
-        // ambil ulang data terbaru
-        $updatedUser   = User::find($user->id);
-        $updatedMember = $updatedUser->member;
+        // ✅ UPDATE MEMBER
+        $member->update([
+            'address' => $validated['address'] ?? $member->address,
+            'city'    => $validated['city'] ?? $member->city,
+            'vehicle_type' => $validated['vehicle_type'] ?? $member->vehicle_type,
+            'vehicle_brand' => $validated['vehicle_brand'] ?? $member->vehicle_brand,
+            'vehicle_model' => $validated['vehicle_model'] ?? $member->vehicle_model,
+            'vehicle_serial_number' =>
+            $validated['vehicle_serial_number'] ?? $member->vehicle_serial_number,
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Profile updated successfully',
-            'user'    => $updatedUser,
-            'member'  => $updatedMember
+            'message' => 'Profile updated',
+            'member'  => $member->fresh('user')
         ]);
     }
 

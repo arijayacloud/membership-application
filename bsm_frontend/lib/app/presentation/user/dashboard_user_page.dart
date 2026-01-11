@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../../services/api_service.dart';
 import '../widgets/dashboard_card.dart';
+import '../widgets/show_snackbar.dart';
 import 'cek_member_page.dart';
 import 'daftar_member_page.dart';
 import 'home_service_page.dart';
@@ -20,13 +22,41 @@ class DashboardUserPage extends StatefulWidget {
 
 class _DashboardUserPageState extends State<DashboardUserPage>
     with WidgetsBindingObserver {
+  String? whatsappNumber;
+  bool loadingWhatsapp = true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    // Saat halaman dibuka → anggap aktif
     SessionManager.updateLastActive();
+    fetchWhatsapp();
+  }
+
+  Future<void> fetchWhatsapp() async {
+    final phone = await ApiService.getWhatsappNumber();
+    setState(() {
+      whatsappNumber = phone;
+      loadingWhatsapp = false;
+    });
+  }
+
+  String normalizeWhatsapp(String phone) {
+    // Hapus spasi, tanda +, strip, dll
+    String clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Jika mulai 0 → ganti 62
+    if (clean.startsWith('0')) {
+      clean = '62${clean.substring(1)}';
+    }
+
+    // Jika sudah 62 → biarkan
+    if (clean.startsWith('62')) {
+      return clean;
+    }
+
+    // Fallback (kalau format aneh)
+    return clean;
   }
 
   @override
@@ -303,10 +333,27 @@ class _DashboardUserPageState extends State<DashboardUserPage>
                           title: "WhatsApp",
                           icon: LucideIcons.messageCircle,
                           color: const Color(0xFF25D366),
-                          onTap: () => WhatsAppService.openChat(
-                            '6285635661415',
-                            message: 'Halo, saya tertarik dengan layanan Anda',
-                          ),
+                          onTap: () {
+                            if (loadingWhatsapp) return;
+
+                            if (whatsappNumber == null ||
+                                whatsappNumber!.isEmpty) {
+                              ShowSnackBar.show(
+                                context,
+                                "Nomor WhatsApp belum tersedia",
+                                "error",
+                              );
+                              return;
+                            }
+
+                            final waNumber = normalizeWhatsapp(whatsappNumber!);
+
+                            WhatsAppService.openChat(
+                              waNumber,
+                              message:
+                                  'Halo, saya tertarik dengan layanan Anda',
+                            );
+                          },
                         ),
                       ],
                     ),

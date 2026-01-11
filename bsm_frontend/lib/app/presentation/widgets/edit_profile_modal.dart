@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../../services/api_service.dart';
 import '../widgets/show_snackbar.dart';
 import 'dart:io';
@@ -70,6 +71,15 @@ class _EditProfileModalState extends State<EditProfileModal> {
     memberPhotoFilename = null;
 
     setState(() {});
+  }
+
+  Future<Map<String, dynamic>> readResponseBody(dynamic res) async {
+    if (res is http.Response) {
+      return jsonDecode(res.body);
+    } else {
+      final bodyString = await res.stream.bytesToString();
+      return jsonDecode(bodyString);
+    }
   }
 
   Future<void> loadData() async {
@@ -160,10 +170,9 @@ class _EditProfileModalState extends State<EditProfileModal> {
       final memberId = selectedMember!["id"];
 
       // ======================
-      // FIELDS
+      // FIELDS (DENGAN _method)
       // ======================
       final fields = <String, String>{
-        "_method": "PUT", // 🔥 WAJIB
         "name": nameCtrl.text.trim(),
         "phone": phoneCtrl.text.trim(),
         "address": addressCtrl.text.trim(),
@@ -183,11 +192,12 @@ class _EditProfileModalState extends State<EditProfileModal> {
       }
 
       // ======================
-      // REQUEST (SELALU MULTIPART)
+      // REQUEST (PUT MULTIPART)
       // ======================
       late final res;
 
       if (kIsWeb && memberPhotoBytes != null) {
+        // 🌐 WEB (BYTES)
         res = await ApiService.multipartPostBytes(
           "member/$memberId/profile",
           fields: fields,
@@ -196,25 +206,25 @@ class _EditProfileModalState extends State<EditProfileModal> {
           fieldName: "member_photo",
         );
       } else if (!kIsWeb && memberPhotoFile != null) {
+        // 📱 MOBILE (FILE)
         res = await ApiService.multipartPost(
           "member/$memberId/profile",
           fields: fields,
           files: {"member_photo": memberPhotoFile!},
         );
       } else {
-        // TANPA FOTO → tetap multipart
         res = await ApiService.multipartPost(
           "member/$memberId/profile",
           fields: fields,
-          files: {},
         );
       }
 
       // ======================
       // RESPONSE
       // ======================
+      final body = await readResponseBody(res);
+
       if (res.statusCode != 200) {
-        final body = jsonDecode(res.body);
         ShowSnackBar.show(
           context,
           body["message"] ?? "Gagal memperbarui profil",

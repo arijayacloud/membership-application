@@ -21,6 +21,7 @@ class MembershipType extends Model
      */
     protected $casts = [
         'benefits' => 'array',
+        'duration_months' => 'integer',
     ];
 
     /**

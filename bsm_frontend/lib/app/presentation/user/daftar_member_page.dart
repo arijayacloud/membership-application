@@ -148,91 +148,83 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
   // SUBMIT FORM
   // ============================
   Future<void> daftar() async {
-    // =====================
-    // VALIDASI
-    // =====================
-    if (selectedMembership == null) {
-      _showMsg("Pilih jenis membership", isError: true);
+  // =====================
+  // VALIDASI
+  // =====================
+  if (selectedMembership == null) {
+    _showMsg("Pilih jenis membership", isError: true);
+    return;
+  }
+
+  if (selectedVehicleType == null ||
+      brandCtrl.text.isEmpty ||
+      modelCtrl.text.isEmpty ||
+      serialCtrl.text.isEmpty) {
+    _showMsg("Lengkapi data kendaraan", isError: true);
+    return;
+  }
+
+  if (kIsWeb) {
+    if (memberPhotoBytes == null || memberPhotoFilename == null) {
+      _showMsg("Upload foto member terlebih dahulu", isError: true);
       return;
     }
-
-    if (selectedVehicleType == null ||
-        brandCtrl.text.isEmpty ||
-        modelCtrl.text.isEmpty ||
-        serialCtrl.text.isEmpty) {
-      _showMsg("Lengkapi data kendaraan", isError: true);
+  } else {
+    if (memberPhotoFile == null) {
+      _showMsg("Upload foto member terlebih dahulu", isError: true);
       return;
-    }
-
-    if (kIsWeb) {
-      if (memberPhotoBytes == null || memberPhotoFilename == null) {
-        _showMsg("Upload foto member terlebih dahulu", isError: true);
-        return;
-      }
-    } else {
-      if (memberPhotoFile == null) {
-        _showMsg("Upload foto member terlebih dahulu", isError: true);
-        return;
-      }
-    }
-
-    try {
-      setState(() => loading = true);
-
-      // =====================
-      // WEB
-      // =====================
-      if (kIsWeb) {
-        final response = await ApiService.multipartPostBytes(
-          "member/register",
-          fields: {
-            "membership_type_id": selectedMembership.toString(),
-            "vehicle_type": selectedVehicleType!,
-            "vehicle_brand": brandCtrl.text,
-            "vehicle_model": modelCtrl.text,
-            "vehicle_serial_number": serialCtrl.text,
-            "address": addressCtrl.text,
-            "city": cityCtrl.text,
-          },
-          bytes: memberPhotoBytes!,
-          filename: memberPhotoFilename!,
-          fieldName: "member_photo",
-        );
-
-        final body = await response.stream.bytesToString();
-        final data = jsonDecode(body);
-
-        _handleRegisterResponse(response.statusCode, data);
-      }
-      // =====================
-      // MOBILE
-      // =====================
-      else {
-        final response = await ApiService.multipartPost(
-          "member/register",
-          fields: {
-            "membership_type_id": selectedMembership.toString(),
-            "vehicle_type": selectedVehicleType!,
-            "vehicle_brand": brandCtrl.text,
-            "vehicle_model": modelCtrl.text,
-            "vehicle_serial_number": serialCtrl.text,
-            "address": addressCtrl.text,
-            "city": cityCtrl.text,
-          },
-          files: {"member_photo": memberPhotoFile!},
-        );
-
-        final body = await response.stream.bytesToString();
-        final data = jsonDecode(body);
-
-        _handleRegisterResponse(response.statusCode, data);
-      }
-    } catch (e) {
-      _showMsg("Error: $e", isError: true);
-    } finally {
-      setState(() => loading = false);
     }
   }
+
+  try {
+    setState(() => loading = true);
+
+    // =====================
+    // FIELDS
+    // =====================
+    final fields = <String, String>{
+      "membership_type_id": selectedMembership.toString(),
+      "vehicle_type": selectedVehicleType!,
+      "vehicle_brand": brandCtrl.text,
+      "vehicle_model": modelCtrl.text,
+      "vehicle_serial_number": serialCtrl.text,
+      "address": addressCtrl.text,
+      "city": cityCtrl.text,
+    };
+
+    // =====================
+    // REQUEST
+    // =====================
+    late final response;
+
+    if (kIsWeb) {
+      response = await ApiService.multipartPostBytes(
+        "member/register",
+        fields: fields,
+        bytes: memberPhotoBytes!,
+        filename: memberPhotoFilename!,
+        fieldName: "member_photo",
+      );
+    } else {
+      response = await ApiService.multipartPost(
+        "member/register",
+        fields: fields,
+        files: {"member_photo": memberPhotoFile!},
+      );
+    }
+
+    // =====================
+    // RESPONSE
+    // =====================
+    final data = jsonDecode(response.body);
+
+    _handleRegisterResponse(response.statusCode, data);
+  } catch (e) {
+    _showMsg("Error: $e", isError: true);
+  } finally {
+    setState(() => loading = false);
+  }
+}
 
   void _handleRegisterResponse(int statusCode, Map data) {
     if (statusCode >= 200 && statusCode < 300) {

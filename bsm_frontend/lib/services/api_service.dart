@@ -206,29 +206,31 @@ class ApiService {
   }
 
   static Future<http.StreamedResponse> multipartPost(
-    String endpoint, {
-    required Map<String, String> fields,
-    required Map<String, File> files,
-  }) async {
-    final token = await LocalStorage.getToken();
-    final uri = Uri.parse("${AppConfig.baseUrl}/api/$endpoint");
+  String endpoint, {
+  required Map<String, String> fields,
+  Map<String, File>? files, // ✅ OPSIONAL
+}) async {
+  final token = await LocalStorage.getToken();
+  final uri = Uri.parse("${AppConfig.baseUrl}/api/$endpoint");
 
-    final req = http.MultipartRequest("POST", uri);
-    req.headers.addAll({
-      "Accept": "application/json",
-      if (token != null) "Authorization": "Bearer $token",
-    });
+  final req = http.MultipartRequest("POST", uri);
+  req.headers.addAll({
+    "Accept": "application/json",
+    if (token != null) "Authorization": "Bearer $token",
+  });
 
-    req.fields.addAll(fields);
+  req.fields.addAll(fields);
 
+  if (files != null && files.isNotEmpty) {
     for (var file in files.entries) {
       req.files.add(
         await http.MultipartFile.fromPath(file.key, file.value.path),
       );
     }
-
-    return req.send();
   }
+
+  return req.send();
+}
 
   // =========================================================
   // MULTIPART PUT
@@ -793,6 +795,24 @@ class ApiService {
       body: jsonEncode(body),
     );
   }
+
+  static Future<String?> getWhatsappNumber() async {
+  final response = await ApiService.get("infos");
+
+  if (response.statusCode == 200) {
+    final json = jsonDecode(response.body);
+
+    if (json['status'] == true && json['data'] != null) {
+      return json['data']['phone'];
+    }
+  }
+
+  if (response.statusCode == 401) {
+    debugPrint("❌ Unauthorized - token invalid atau expired");
+  }
+
+  return null;
+}
 
   // =====================================================
   // 🛑 Handler Error
