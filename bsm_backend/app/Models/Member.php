@@ -16,6 +16,8 @@ class Member extends Model
         'duration_months' => 'integer',
     ];
 
+    protected $appends = ['member_photo_url'];
+
     protected $fillable = [
         'user_id',
         'member_code',
@@ -87,5 +89,13 @@ class Member extends Model
     {
         if (!$this->expired_at) return false;
         return Carbon::now()->lte($this->expired_at);
+    }
+
+    public function getMemberPhotoUrlAttribute()
+    {
+        if ($this->member_photo) {
+            return url('/media/' . $this->member_photo);
+        }
+        return null;
     }
 }

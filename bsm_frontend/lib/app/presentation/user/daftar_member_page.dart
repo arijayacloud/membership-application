@@ -216,7 +216,11 @@ class _DaftarMemberPageState extends State<DaftarMemberPage> {
     // =====================
     // RESPONSE
     // =====================
-    final data = jsonDecode(response.body);
+final statusCode = response.statusCode;
+final bodyString = await response.stream.bytesToString();
+final data = jsonDecode(bodyString);
+
+_handleRegisterResponse(statusCode, data);
 
     _handleRegisterResponse(response.statusCode, data);
   } catch (e) {

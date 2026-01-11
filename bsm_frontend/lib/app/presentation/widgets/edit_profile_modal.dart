@@ -86,7 +86,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
     try {
       setState(() => loading = true);
 
-      final res = await ApiService.get("member/profile");
+      final res = await ApiService.get("member/profile-data");
       if (res.statusCode != 200) {
         ShowSnackBar.show(context, "Gagal memuat data profil", "error");
         return;
@@ -143,16 +143,8 @@ class _EditProfileModalState extends State<EditProfileModal> {
     try {
       setState(() => loading = true);
 
-      // ======================
-      // VALIDASI
-      // ======================
-      if (nameCtrl.text.trim().isEmpty) {
-        ShowSnackBar.show(context, "Nama wajib diisi", "error");
-        return;
-      }
-
-      if (phoneCtrl.text.trim().isEmpty) {
-        ShowSnackBar.show(context, "No telepon wajib diisi", "error");
+      if (selectedMember == null) {
+        ShowSnackBar.show(context, "Pilih member terlebih dahulu", "error");
         return;
       }
 
@@ -162,72 +154,54 @@ class _EditProfileModalState extends State<EditProfileModal> {
         return;
       }
 
-      if (selectedMember == null) {
-        ShowSnackBar.show(context, "Pilih member terlebih dahulu", "error");
-        return;
-      }
-
-      final memberId = selectedMember!["id"];
-
-      // ======================
-      // FIELDS (DENGAN _method)
-      // ======================
       final fields = <String, String>{
         "name": nameCtrl.text.trim(),
         "phone": phoneCtrl.text.trim(),
+        "email": emailCtrl.text.trim(),
         "address": addressCtrl.text.trim(),
         "city": cityCtrl.text.trim(),
-        "vehicle_type": selectedVehicleType ?? "",
         "vehicle_brand": vehicleBrandCtrl.text.trim(),
         "vehicle_model": vehicleModelCtrl.text.trim(),
         "vehicle_serial_number": vehicleSerialNumberCtrl.text.trim(),
       };
 
-      if (emailCtrl.text.trim().isNotEmpty) {
-        fields["email"] = emailCtrl.text.trim();
-      }
-
       if (passwordCtrl.text.isNotEmpty) {
         fields["password"] = passwordCtrl.text;
       }
 
-      // ======================
-      // REQUEST (PUT MULTIPART)
-      // ======================
+      if (selectedVehicleType != null) {
+        fields["vehicle_type"] = selectedVehicleType!;
+      }
+
       late final res;
 
+      // ✅ ENDPOINT TUNGGAL
+      const endpoint = "member/profile";
+
       if (kIsWeb && memberPhotoBytes != null) {
-        // 🌐 WEB (BYTES)
         res = await ApiService.multipartPostBytes(
-          "member/$memberId/profile",
+          endpoint,
           fields: fields,
           bytes: memberPhotoBytes!,
           filename: memberPhotoFilename!,
           fieldName: "member_photo",
         );
       } else if (!kIsWeb && memberPhotoFile != null) {
-        // 📱 MOBILE (FILE)
         res = await ApiService.multipartPost(
-          "member/$memberId/profile",
+          endpoint,
           fields: fields,
           files: {"member_photo": memberPhotoFile!},
         );
       } else {
-        res = await ApiService.multipartPost(
-          "member/$memberId/profile",
-          fields: fields,
-        );
+        res = await ApiService.multipartPost(endpoint, fields: fields);
       }
 
-      // ======================
-      // RESPONSE
-      // ======================
       final body = await readResponseBody(res);
 
       if (res.statusCode != 200) {
         ShowSnackBar.show(
           context,
-          body["message"] ?? "Gagal memperbarui profil",
+          body["message"] ?? "Gagal menyimpan profil",
           "error",
         );
         return;

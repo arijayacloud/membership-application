@@ -224,42 +224,72 @@ class MemberController extends Controller
         ]);
     }
 
-    public function updateProfile(Request $request, Member $member)
+    public function updateProfile(Request $request)
     {
-        $authUser = Auth::user();
+        $user = $request->user();
 
-        // 🔐 CEK KEPEMILIKAN
-        if ($member->user_id !== $authUser->id) {
+        // ✅ Ambil MEMBER AKTIF berdasarkan status
+        $member = Member::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$member) {
             return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized member'
-            ], 403);
+                'message' => 'Member aktif tidak ditemukan'
+            ], 404);
         }
 
         $validated = $request->validate([
-            'name'   => 'required|string|max:255',
-            'phone'  => 'required|string|unique:users,phone,' . $authUser->id,
-            'email'  => 'nullable|email|unique:users,email,' . $authUser->id,
+            // USER
+            'name'  => 'required|string|max:255',
+            'phone' => 'required|string|unique:users,phone,' . $user->id,
+            'email' => 'nullable|email|unique:users,email,' . $user->id,
+            'password' => 'nullable|min:6',
 
+            // MEMBER
             'address' => 'nullable|string',
             'city'    => 'nullable|string',
-            'vehicle_type' => 'nullable|string',
+            'vehicle_type'  => 'nullable|string',
             'vehicle_brand' => 'nullable|string',
             'vehicle_model' => 'nullable|string',
             'vehicle_serial_number' => 'nullable|string',
+            'member_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp',
         ]);
 
-        // ✅ AMBIL USER ELOQUENT ASLI
-        $user = User::findOrFail($authUser->id);
-
-        // ✅ SEKARANG PASTI AMAN
+        // ======================
+        // UPDATE USER
+        // ======================
         $user->update([
             'name'  => $validated['name'],
             'phone' => $validated['phone'],
             'email' => $validated['email'] ?? $user->email,
+            'password' => isset($validated['password'])
+                ? bcrypt($validated['password'])
+                : $user->password,
         ]);
 
-        // 📸 FOTO MEMBER
+        // ======================
+        // SERIAL DUPLICATE CHECK
+        // ======================
+        if (
+            isset($validated['vehicle_serial_number']) &&
+            $validated['vehicle_serial_number'] !== $member->vehicle_serial_number
+        ) {
+            $exists = Member::where('user_id', $user->id)
+                ->where('vehicle_serial_number', $validated['vehicle_serial_number'])
+                ->exists();
+
+            if ($exists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Nomor rangka sudah digunakan'
+                ], 409);
+            }
+        }
+
+        // ======================
+        // FOTO
+        // ======================
         if ($request->hasFile('member_photo')) {
             if ($member->member_photo) {
                 Storage::disk('public')->delete($member->member_photo);
@@ -270,10 +300,12 @@ class MemberController extends Controller
                 ->store('member_photos', 'public');
         }
 
-        // ✅ UPDATE MEMBER
+        // ======================
+        // UPDATE MEMBER
+        // ======================
         $member->update([
             'address' => $validated['address'] ?? $member->address,
-            'city'    => $validated['city'] ?? $member->city,
+            'city' => $validated['city'] ?? $member->city,
             'vehicle_type' => $validated['vehicle_type'] ?? $member->vehicle_type,
             'vehicle_brand' => $validated['vehicle_brand'] ?? $member->vehicle_brand,
             'vehicle_model' => $validated['vehicle_model'] ?? $member->vehicle_model,
@@ -283,8 +315,8 @@ class MemberController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Profile updated',
-            'member'  => $member->fresh('user')
+            'message' => 'Profil berhasil diperbarui',
+            'member' => $member->fresh()
         ]);
     }
 
@@ -546,6 +578,37 @@ class MemberController extends Controller
 
         return response()->json([
             'message' => 'Member berhasil divalidasi'
+        ]);
+    }
+
+    public function profileData(Request $request)
+    {
+        $user = $request->user();
+
+        $members = Member::where('user_id', $user->id)
+            ->get()
+            ->map(function ($m) {
+                return [
+                    'id' => $m->id,
+                    'address' => $m->address,
+                    'city' => $m->city,
+                    'vehicle_type' => $m->vehicle_type,
+                    'vehicle_brand' => $m->vehicle_brand,
+                    'vehicle_model' => $m->vehicle_model,
+                    'vehicle_serial_number' => $m->vehicle_serial_number,
+                    'member_photo_url' => $m->member_photo
+                        ? url("media/{$m->member_photo}")
+                        : null,
+                ];
+            });
+
+        return response()->json([
+            'user' => [
+                'name' => $user->name,
+                'phone' => $user->phone,
+                'email' => $user->email,
+            ],
+            'members' => $members,
         ]);
     }
 }
