@@ -54,7 +54,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/member/register', [MemberController::class, 'registerMember']);
     Route::get('/member/profile-data', [MemberController::class, 'profileData']);
     // USER
-    Route::post('/member/profile', [MemberController::class, 'updateProfile']);
+    Route::put('/me', [AuthController::class, 'updateProfile']);
+    Route::put('/member/{id}', [MemberController::class, 'updateByUser']);
 
     // 📌 USER - VIEW MEMBERSHIP TYPES
     Route::get('/membership-types', [MemberController::class, 'getMembershipTypes']);

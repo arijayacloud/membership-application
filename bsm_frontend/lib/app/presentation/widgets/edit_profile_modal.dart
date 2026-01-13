@@ -86,7 +86,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
     try {
       setState(() => loading = true);
 
-      final res = await ApiService.get("member/profile-data");
+      final res = await ApiService.get("member/profile");
       if (res.statusCode != 200) {
         ShowSnackBar.show(context, "Gagal memuat data profil", "error");
         return;
@@ -143,7 +143,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
     try {
       setState(() => loading = true);
 
-      if (selectedMember == null) {
+      if (selectedMemberId == null) {
         ShowSnackBar.show(context, "Pilih member terlebih dahulu", "error");
         return;
       }
@@ -154,54 +154,82 @@ class _EditProfileModalState extends State<EditProfileModal> {
         return;
       }
 
-      final fields = <String, String>{
+      // ======================
+      // 1️⃣ UPDATE USER
+      // ======================
+      final userFields = {
         "name": nameCtrl.text.trim(),
         "phone": phoneCtrl.text.trim(),
         "email": emailCtrl.text.trim(),
+      };
+
+      if (passwordCtrl.text.isNotEmpty) {
+        userFields["password"] = passwordCtrl.text;
+      }
+
+      final userRes = await ApiService.put("me", body: userFields);
+
+      if (userRes.statusCode != 200) {
+        final body = jsonDecode(userRes.body);
+        ShowSnackBar.show(
+          context,
+          body["message"] ?? "Gagal memperbarui data user",
+          "error",
+        );
+        return;
+      }
+
+      // ======================
+      // 2️⃣ UPDATE MEMBER
+      // ======================
+      final memberFields = {
         "address": addressCtrl.text.trim(),
         "city": cityCtrl.text.trim(),
+        "vehicle_type": selectedVehicleType ?? "",
         "vehicle_brand": vehicleBrandCtrl.text.trim(),
         "vehicle_model": vehicleModelCtrl.text.trim(),
         "vehicle_serial_number": vehicleSerialNumberCtrl.text.trim(),
       };
 
-      if (passwordCtrl.text.isNotEmpty) {
-        fields["password"] = passwordCtrl.text;
-      }
+      final endpoint = "member/$selectedMemberId";
+      late final memberRes;
 
-      if (selectedVehicleType != null) {
-        fields["vehicle_type"] = selectedVehicleType!;
-      }
-
-      late final res;
-
-      // ✅ ENDPOINT TUNGGAL
-      const endpoint = "member/profile";
-
+      // ======================
+      // 📸 JIKA ADA FOTO → POST + _method=PUT
+      // ======================
       if (kIsWeb && memberPhotoBytes != null) {
-        res = await ApiService.multipartPostBytes(
+        memberRes = await ApiService.multipartPostBytes(
           endpoint,
-          fields: fields,
+          fields: {
+            ...memberFields,
+            "_method": "PUT", // 🔥 KUNCI
+          },
           bytes: memberPhotoBytes!,
           filename: memberPhotoFilename!,
           fieldName: "member_photo",
         );
       } else if (!kIsWeb && memberPhotoFile != null) {
-        res = await ApiService.multipartPost(
+        memberRes = await ApiService.multipartPost(
           endpoint,
-          fields: fields,
+          fields: {
+            ...memberFields,
+            "_method": "PUT", // 🔥 KUNCI
+          },
           files: {"member_photo": memberPhotoFile!},
         );
-      } else {
-        res = await ApiService.multipartPost(endpoint, fields: fields);
+      }
+      // ======================
+      // TANPA FOTO → PUT BIASA
+      // ======================
+      else {
+        memberRes = await ApiService.put(endpoint, body: memberFields);
       }
 
-      final body = await readResponseBody(res);
-
-      if (res.statusCode != 200) {
+      if (memberRes.statusCode != 200) {
+        final body = await readResponseBody(memberRes);
         ShowSnackBar.show(
           context,
-          body["message"] ?? "Gagal menyimpan profil",
+          body["message"] ?? "Gagal memperbarui data member",
           "error",
         );
         return;

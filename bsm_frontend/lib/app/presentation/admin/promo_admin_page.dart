@@ -612,21 +612,24 @@ class _PromoAdminPageState extends State<PromoAdminPage> {
   // 🔵 UPDATE STATUS PROMO (aktif / nonaktif)
   // ====================================================
   Future<void> toggleStatus(int id, bool newValue) async {
-    final res = await ApiService.put("admin/promo/status/$id", {
+  final res = await ApiService.put(
+    "admin/promo/status/$id",
+    body: {
       "is_active": newValue,
-    });
+    },
+  );
 
-    if (res.statusCode == 200) {
-      fetchPromos();
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+  if (res.statusCode == 200) {
+    fetchPromos();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      ShowSnackBar.show(
-        context,
-        newValue ? "Promo diaktifkan" : "Promo dinonaktifkan",
-        newValue ? "success" : "warning",
-      );
-    }
+    ShowSnackBar.show(
+      context,
+      newValue ? "Promo diaktifkan" : "Promo dinonaktifkan",
+      newValue ? "success" : "warning",
+    );
   }
+}
 
   bool isExpired(String? endDate) {
     if (endDate == null || endDate.isEmpty) return true;

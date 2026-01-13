@@ -70,16 +70,20 @@ class ApiService {
   // 🔵 PUT
   // =====================================================
   static Future<http.Response> put(
-    String endpoint,
-    Map<String, dynamic> body,
-  ) async {
+    String endpoint, {
+    required Map<String, dynamic> body,
+  }) async {
     try {
       final token = await LocalStorage.getToken();
       final uri = Uri.parse("${AppConfig.baseUrl}/api/$endpoint");
 
       return await http.put(
         uri,
-        headers: baseHeaders(token),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
         body: jsonEncode(body),
       );
     } catch (e) {
@@ -206,31 +210,31 @@ class ApiService {
   }
 
   static Future<http.StreamedResponse> multipartPost(
-  String endpoint, {
-  required Map<String, String> fields,
-  Map<String, File>? files, // ✅ OPSIONAL
-}) async {
-  final token = await LocalStorage.getToken();
-  final uri = Uri.parse("${AppConfig.baseUrl}/api/$endpoint");
+    String endpoint, {
+    required Map<String, String> fields,
+    Map<String, File>? files, // ✅ OPSIONAL
+  }) async {
+    final token = await LocalStorage.getToken();
+    final uri = Uri.parse("${AppConfig.baseUrl}/api/$endpoint");
 
-  final req = http.MultipartRequest("POST", uri);
-  req.headers.addAll({
-    "Accept": "application/json",
-    if (token != null) "Authorization": "Bearer $token",
-  });
+    final req = http.MultipartRequest("POST", uri);
+    req.headers.addAll({
+      "Accept": "application/json",
+      if (token != null) "Authorization": "Bearer $token",
+    });
 
-  req.fields.addAll(fields);
+    req.fields.addAll(fields);
 
-  if (files != null && files.isNotEmpty) {
-    for (var file in files.entries) {
-      req.files.add(
-        await http.MultipartFile.fromPath(file.key, file.value.path),
-      );
+    if (files != null && files.isNotEmpty) {
+      for (var file in files.entries) {
+        req.files.add(
+          await http.MultipartFile.fromPath(file.key, file.value.path),
+        );
+      }
     }
-  }
 
-  return req.send();
-}
+    return req.send();
+  }
 
   // =========================================================
   // MULTIPART PUT
@@ -295,168 +299,158 @@ class ApiService {
   }
 
   static Future<http.StreamedResponse> multipartPutBytes(
-  String endpoint, {
-  required Map<String, String> fields,
-  required Uint8List bytes,
-  required String filename,
-  required String fieldName,
-}) async {
-  final token = await LocalStorage.getToken();
-  final uri = Uri.parse("${AppConfig.baseUrl}/api/$endpoint");
-
-  final req = http.MultipartRequest("PUT", uri);
-  req.headers.addAll({
-    "Accept": "application/json",
-    if (token != null) "Authorization": "Bearer $token",
-  });
-
-  req.fields.addAll(fields);
-
-  req.files.add(
-    http.MultipartFile.fromBytes(
-      fieldName,
-      bytes,
-      filename: filename,
-      contentType: _getImageMediaType(filename),
-    ),
-  );
-
-  return req.send();
-}
-
-  static Future<Map<String, dynamic>> registerHomeService({
-  required int memberId,
-  required String serviceType,
-  required String scheduleDate,
-  required String scheduleTime,
-  String? address,
-  String? city,
-  String? problemDescription,
-  Uint8List? photoBytes,
-  String? filename,
-  File? photoFile,
-}) async {
-  try {
+    String endpoint, {
+    required Map<String, String> fields,
+    required Uint8List bytes,
+    required String filename,
+    required String fieldName,
+  }) async {
     final token = await LocalStorage.getToken();
-    final uri = Uri.parse("${AppConfig.baseUrl}/api/home-service/request");
+    final uri = Uri.parse("${AppConfig.baseUrl}/api/$endpoint");
 
-    debugPrint("⏩ POST $uri");
-    debugPrint("MEMBER ID: $memberId");
-
-    final request = http.MultipartRequest("POST", uri);
-
-    request.headers.addAll({
+    final req = http.MultipartRequest("PUT", uri);
+    req.headers.addAll({
       "Accept": "application/json",
       if (token != null) "Authorization": "Bearer $token",
     });
 
-    // =========================
-    // ✅ VALIDASI FRONTEND
-    // =========================
-    if (memberId <= 0 ||
-        serviceType.trim().isEmpty ||
-        scheduleDate.isEmpty ||
-        scheduleTime.isEmpty) {
-      return {
-        "success": false,
-        "message": "Data wajib tidak lengkap",
-      };
-    }
+    req.fields.addAll(fields);
 
-    // =========================
-    // 📦 FIELDS
-    // =========================
-    request.fields.addAll({
-      "member_id": memberId.toString(), // 🔥 PENTING
-      "service_type": serviceType.trim(),
-      "schedule_date": scheduleDate,
-      "schedule_time": scheduleTime,
-    });
+    req.files.add(
+      http.MultipartFile.fromBytes(
+        fieldName,
+        bytes,
+        filename: filename,
+        contentType: _getImageMediaType(filename),
+      ),
+    );
 
-    if (address?.isNotEmpty == true) {
-      request.fields["address"] = address!.trim();
-    }
-
-    if (city?.isNotEmpty == true) {
-      request.fields["city"] = city!.trim();
-    }
-
-    if (problemDescription?.isNotEmpty == true) {
-      request.fields["problem_description"] =
-          problemDescription!.trim();
-    }
-
-    // =========================
-    // 📸 FILE UPLOAD
-    // =========================
-    if (photoBytes != null && filename != null) {
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'problem_photo',
-          photoBytes,
-          filename: filename,
-          contentType: _getImageMediaType(filename),
-        ),
-      );
-    } else if (photoFile != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'problem_photo',
-          photoFile.path,
-        ),
-      );
-    }
-
-    // =========================
-    // 🚀 SEND REQUEST
-    // =========================
-    final streamed = await request.send();
-    final res = await http.Response.fromStream(streamed);
-
-    debugPrint("STATUS CODE: ${res.statusCode}");
-    debugPrint("RESPONSE BODY: ${res.body}");
-
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      final decoded = jsonDecode(res.body);
-      return {
-        "success": decoded["success"] ?? true,
-        "message": decoded["message"],
-        "data": decoded["data"],
-      };
-    }
-
-    if (res.statusCode == 422) {
-      final decoded = jsonDecode(res.body);
-      return {
-        "success": false,
-        "message": decoded["message"] ?? "Validasi gagal",
-        "errors": decoded["errors"],
-      };
-    }
-
-    if (res.statusCode == 401) {
-      return {
-        "success": false,
-        "message": "Unauthenticated",
-      };
-    }
-
-    return {
-      "success": false,
-      "message": "Server error ${res.statusCode}",
-      "response": res.body,
-    };
-  } catch (e, s) {
-    debugPrint("EXCEPTION: $e");
-    debugPrint("STACKTRACE: $s");
-
-    return {
-      "success": false,
-      "message": "Request failed",
-      "error": e.toString(),
-    };
+    return req.send();
   }
-}
+
+  static Future<Map<String, dynamic>> registerHomeService({
+    required int memberId,
+    required String serviceType,
+    required String scheduleDate,
+    required String scheduleTime,
+    String? address,
+    String? city,
+    String? problemDescription,
+    Uint8List? photoBytes,
+    String? filename,
+    File? photoFile,
+  }) async {
+    try {
+      final token = await LocalStorage.getToken();
+      final uri = Uri.parse("${AppConfig.baseUrl}/api/home-service/request");
+
+      debugPrint("⏩ POST $uri");
+      debugPrint("MEMBER ID: $memberId");
+
+      final request = http.MultipartRequest("POST", uri);
+
+      request.headers.addAll({
+        "Accept": "application/json",
+        if (token != null) "Authorization": "Bearer $token",
+      });
+
+      // =========================
+      // ✅ VALIDASI FRONTEND
+      // =========================
+      if (memberId <= 0 ||
+          serviceType.trim().isEmpty ||
+          scheduleDate.isEmpty ||
+          scheduleTime.isEmpty) {
+        return {"success": false, "message": "Data wajib tidak lengkap"};
+      }
+
+      // =========================
+      // 📦 FIELDS
+      // =========================
+      request.fields.addAll({
+        "member_id": memberId.toString(), // 🔥 PENTING
+        "service_type": serviceType.trim(),
+        "schedule_date": scheduleDate,
+        "schedule_time": scheduleTime,
+      });
+
+      if (address?.isNotEmpty == true) {
+        request.fields["address"] = address!.trim();
+      }
+
+      if (city?.isNotEmpty == true) {
+        request.fields["city"] = city!.trim();
+      }
+
+      if (problemDescription?.isNotEmpty == true) {
+        request.fields["problem_description"] = problemDescription!.trim();
+      }
+
+      // =========================
+      // 📸 FILE UPLOAD
+      // =========================
+      if (photoBytes != null && filename != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'problem_photo',
+            photoBytes,
+            filename: filename,
+            contentType: _getImageMediaType(filename),
+          ),
+        );
+      } else if (photoFile != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('problem_photo', photoFile.path),
+        );
+      }
+
+      // =========================
+      // 🚀 SEND REQUEST
+      // =========================
+      final streamed = await request.send();
+      final res = await http.Response.fromStream(streamed);
+
+      debugPrint("STATUS CODE: ${res.statusCode}");
+      debugPrint("RESPONSE BODY: ${res.body}");
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final decoded = jsonDecode(res.body);
+        return {
+          "success": decoded["success"] ?? true,
+          "message": decoded["message"],
+          "data": decoded["data"],
+        };
+      }
+
+      if (res.statusCode == 422) {
+        final decoded = jsonDecode(res.body);
+        return {
+          "success": false,
+          "message": decoded["message"] ?? "Validasi gagal",
+          "errors": decoded["errors"],
+        };
+      }
+
+      if (res.statusCode == 401) {
+        return {"success": false, "message": "Unauthenticated"};
+      }
+
+      return {
+        "success": false,
+        "message": "Server error ${res.statusCode}",
+        "response": res.body,
+      };
+    } catch (e, s) {
+      debugPrint("EXCEPTION: $e");
+      debugPrint("STACKTRACE: $s");
+
+      return {
+        "success": false,
+        "message": "Request failed",
+        "error": e.toString(),
+      };
+    }
+  }
 
   static Future<Map<String, dynamic>> createPromo({
     required String title,
@@ -797,22 +791,22 @@ class ApiService {
   }
 
   static Future<String?> getWhatsappNumber() async {
-  final response = await ApiService.get("infos");
+    final response = await ApiService.get("infos");
 
-  if (response.statusCode == 200) {
-    final json = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
 
-    if (json['status'] == true && json['data'] != null) {
-      return json['data']['phone'];
+      if (json['status'] == true && json['data'] != null) {
+        return json['data']['phone'];
+      }
     }
-  }
 
-  if (response.statusCode == 401) {
-    debugPrint("❌ Unauthorized - token invalid atau expired");
-  }
+    if (response.statusCode == 401) {
+      debugPrint("❌ Unauthorized - token invalid atau expired");
+    }
 
-  return null;
-}
+    return null;
+  }
 
   // =====================================================
   // 🛑 Handler Error

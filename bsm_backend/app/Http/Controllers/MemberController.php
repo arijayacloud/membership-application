@@ -224,99 +224,55 @@ class MemberController extends Controller
         ]);
     }
 
-    public function updateProfile(Request $request)
+    public function updateByUser(Request $request, $id)
     {
         $user = $request->user();
 
-        // ✅ Ambil MEMBER AKTIF berdasarkan status
-        $member = Member::where('user_id', $user->id)
-            ->where('status', 'active')
-            ->first();
+        $member = Member::where('id', $id)
+            ->where('user_id', $user->id)
+            ->firstOrFail();
 
-        if (!$member) {
-            return response()->json([
-                'message' => 'Member aktif tidak ditemukan'
-            ], 404);
-        }
-
-        $validated = $request->validate([
-            // USER
-            'name'  => 'required|string|max:255',
-            'phone' => 'required|string|unique:users,phone,' . $user->id,
-            'email' => 'nullable|email|unique:users,email,' . $user->id,
-            'password' => 'nullable|min:6',
-
-            // MEMBER
-            'address' => 'nullable|string',
-            'city'    => 'nullable|string',
-            'vehicle_type'  => 'nullable|string',
+        $data = $request->validate([
+            'vehicle_type' => 'nullable|string',
             'vehicle_brand' => 'nullable|string',
             'vehicle_model' => 'nullable|string',
             'vehicle_serial_number' => 'nullable|string',
+            'address' => 'nullable|string',
+            'city' => 'nullable|string',
             'member_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp',
         ]);
 
-        // ======================
-        // UPDATE USER
-        // ======================
-        $user->update([
-            'name'  => $validated['name'],
-            'phone' => $validated['phone'],
-            'email' => $validated['email'] ?? $user->email,
-            'password' => isset($validated['password'])
-                ? bcrypt($validated['password'])
-                : $user->password,
-        ]);
-
-        // ======================
-        // SERIAL DUPLICATE CHECK
-        // ======================
-        if (
-            isset($validated['vehicle_serial_number']) &&
-            $validated['vehicle_serial_number'] !== $member->vehicle_serial_number
-        ) {
+        // Cegah duplikasi unit
+        if ($request->filled('vehicle_serial_number')) {
             $exists = Member::where('user_id', $user->id)
-                ->where('vehicle_serial_number', $validated['vehicle_serial_number'])
+                ->where('vehicle_serial_number', $request->vehicle_serial_number)
+                ->where('id', '!=', $member->id)
                 ->exists();
 
             if ($exists) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Nomor rangka sudah digunakan'
+                    'message' => 'Unit kendaraan ini sudah terdaftar'
                 ], 409);
             }
         }
 
-        // ======================
-        // FOTO
-        // ======================
+        // Upload foto
         if ($request->hasFile('member_photo')) {
-            if ($member->member_photo) {
+            if ($member->member_photo && Storage::disk('public')->exists($member->member_photo)) {
                 Storage::disk('public')->delete($member->member_photo);
             }
 
-            $member->member_photo = $request
-                ->file('member_photo')
-                ->store('member_photos', 'public');
+            $path = $request->file('member_photo')->store('member_photos', 'public');
+            $data['member_photo'] = $path;
         }
 
-        // ======================
-        // UPDATE MEMBER
-        // ======================
-        $member->update([
-            'address' => $validated['address'] ?? $member->address,
-            'city' => $validated['city'] ?? $member->city,
-            'vehicle_type' => $validated['vehicle_type'] ?? $member->vehicle_type,
-            'vehicle_brand' => $validated['vehicle_brand'] ?? $member->vehicle_brand,
-            'vehicle_model' => $validated['vehicle_model'] ?? $member->vehicle_model,
-            'vehicle_serial_number' =>
-            $validated['vehicle_serial_number'] ?? $member->vehicle_serial_number,
-        ]);
+        $member->update($data);
 
         return response()->json([
             'success' => true,
-            'message' => 'Profil berhasil diperbarui',
-            'member' => $member->fresh()
+            'message' => 'Data member berhasil diperbarui',
+            'member' => $member
         ]);
     }
 
